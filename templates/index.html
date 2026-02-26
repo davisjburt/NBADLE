@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NBADLE</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/styles.css') }}"
+    />
+  </head>
+  <body>
+    <div class="container">
+      <div id="start-screen">
+        <h1>NBADLE</h1>
+        <p>Choose a mode to start playing.</p>
+        <button class="mode-btn" data-mode="classic">Classic Mode</button>
+        <button class="mode-btn" data-mode="stats">Stats Mode</button>
+      </div>
+
+      <div id="game-screen" style="display: none">
+        <div class="game-header">
+          <button id="back-button" class="back-btn" aria-label="Back">❮</button>
+          <h1 id="game-title">NBADLE – Classic</h1>
+          <button id="give-up-button" class="give-up-btn">Give Up</button>
+        </div>
+
+        <div id="loading-indicator">
+          Fetching live roster data from NBA API...
+        </div>
+
+        <div class="top-bar">
+          <div class="search-wrapper">
+            <div class="input-container">
+              <input
+                type="text"
+                id="player-input"
+                placeholder="Guess a player..."
+                autocomplete="off"
+              />
+              <div id="autocomplete-list" class="autocomplete-items"></div>
+            </div>
+          </div>
+
+          <div class="hint-panel">
+            <div class="hint-title"></div>
+            <div class="hint-image-wrapper">
+              <img id="silhouette-img" alt="Player Silhouette" />
+              <img id="team-logo-img" alt="Team Logo" />
+              <canvas id="silhouette-canvas"></canvas>
+              <div id="silhouette-placeholder" class="hint-placeholder">
+                Click “Show Hint” for a clue.
+              </div>
+            </div>
+            <button id="hint-button">Show Hint</button>
+          </div>
+        </div>
+
+        <div class="board">
+          <div class="header-row" id="classic-header">
+            <div class="cell name-cell">Name</div>
+            <div class="cell">Team</div>
+            <div class="cell">Conf</div>
+            <div class="cell">Div</div>
+            <div class="cell">Pos</div>
+            <div class="cell">Ht</div>
+            <div class="cell">Age</div>
+            <div class="cell">#</div>
+          </div>
+
+          <div class="header-row" id="stats-header" style="display: none">
+            <div class="cell name-cell">Name</div>
+            <div class="cell">Team</div>
+            <div class="cell">PTS</div>
+            <div class="cell">REB</div>
+            <div class="cell">AST</div>
+            <div class="cell">STL</div>
+            <div class="cell">BLK</div>
+            <div class="cell">3PM</div>
+          </div>
+
+          <div id="guesses-container"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="win-modal" class="modal-overlay">
+      <div class="modal-content">
+        <h2 id="win-title">You Got It!</h2>
+        <p>
+          <br />
+          <strong id="win-name" style="font-size: 24px"></strong>
+        </p>
+        <img id="headshot-img" src="" alt="Player Headshot" />
+        <button class="play-again-btn" id="play-again-btn">New Game</button>
+      </div>
+    </div>
+
+    <script>
+      const fallbackPlayers = {{ fallback_players | tojson | safe }};
+    </script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  </body>
+</html>

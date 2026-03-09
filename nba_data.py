@@ -47,6 +47,34 @@ def save_to_cache(players):
         json.dump(payload, f)
 
 
+def is_starter(player):
+    """Determine if a player is likely a starter based on stats thresholds."""
+    pts = player.get('pts', 0)
+    reb = player.get('reb', 0)
+    ast = player.get('ast', 0)
+    stl = player.get('stl', 0)
+    blk = player.get('blk', 0)
+    fg3m = player.get('fg3m', 0)
+    
+    # Starter criteria: meeting any of these thresholds
+    if pts >= 12:  # 12+ points per game
+        return True
+    if reb >= 7:   # 7+ rebounds per game
+        return True
+    if ast >= 5:   # 5+ assists per game
+        return True
+    if stl >= 1.5: # 1.5+ steals per game
+        return True
+    if blk >= 1.5: # 1.5+ blocks per game
+        return True
+    if fg3m >= 2.5: # 2.5+ 3-pointers per game
+        return True
+    
+    # Combined impact score
+    impact_score = pts + (reb * 1.2) + (ast * 1.5) + (stl * 3) + (blk * 3) + (fg3m * 2)
+    return impact_score >= 18
+
+
 def fetch_players_from_nba():
     cached = load_from_cache()
     if cached:
@@ -234,6 +262,10 @@ def fetch_players_from_nba():
                     "stl": stl,
                     "blk": blk,
                     "fg3m": fg3m,
+                    "is_starter": is_starter({
+                        "pts": pts, "reb": reb, "ast": ast, 
+                        "stl": stl, "blk": blk, "fg3m": fg3m
+                    })
                 }
             )
 

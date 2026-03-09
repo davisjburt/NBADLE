@@ -159,3 +159,9 @@ PYTHON_FALLBACK_ROSTER = [
         "fg3m": 2.0,
     },
 ]
+
+# Add starter status to fallback roster (will be updated after nba_data is imported)
+def add_starter_status_to_fallback():
+    from nba_data import is_starter
+    for player in PYTHON_FALLBACK_ROSTER:
+        player["is_starter"] = is_starter(player)

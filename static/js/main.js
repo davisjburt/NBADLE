@@ -7,12 +7,14 @@ let targetPlayer =
     : null;
 let targetImages = null;
 let currentMode = "classic";
+let startersOnly = false;
 
 async function fetchPlayers() {
   const loader = document.getElementById("loading-indicator");
   loader.style.display = "block";
   try {
-    const response = await fetch("/api/players");
+    const startersParam = startersOnly ? "?starters_only=true" : "";
+    const response = await fetch("/api/players" + startersParam);
     if (!response.ok) throw new Error("Server error");
     const data = await response.json();
     if (Array.isArray(data) && data.length > 0) {
@@ -21,9 +23,22 @@ async function fetchPlayers() {
       targetImages = null;
       await loadTargetImages();
       console.log("Live data loaded: " + players.length + " players.");
+      if (startersOnly) {
+        console.log("Filtered to starters only.");
+      }
     }
   } catch (err) {
     console.warn("Backend unavailable. Using fallback data.", err);
+    // Apply starter filter to fallback data if needed
+    if (startersOnly) {
+      players = fallbackPlayers.filter(p => p.is_starter);
+      console.log("Using fallback data filtered to starters: " + players.length + " players.");
+    } else {
+      players = fallbackPlayers;
+    }
+    if (players.length > 0) {
+      targetPlayer = players[Math.floor(Math.random() * players.length)];
+    }
   }
   if (targetPlayer && !targetImages) {
     await loadTargetImages();
@@ -74,8 +89,8 @@ function checkNumberVal(guessVal, targetVal, threshold) {
   if (g === t) status = "match";
   else if (diff <= threshold) status = "partial";
   let arrow = "";
-  if (g < t) arrow = "▲";
-  if (g > t) arrow = "▼";
+  if (g < t) arrow = " ▲";
+  if (g > t) arrow = " ▼";
   return { status, arrow };
 }
 
@@ -210,7 +225,7 @@ function showWinModal(gaveUp) {
   const titleEl = document.getElementById("win-title");
   const imgEl = document.getElementById("headshot-img");
 
-  titleEl.textContent = gaveUp ? "The Answer Was" : "You Got It!";
+  titleEl.textContent = gaveUp ? "The Player Was" : "You Got It!";
 
   if (targetImages && targetImages.headshot) {
     imgEl.src = targetImages.headshot;
@@ -452,6 +467,22 @@ function setupGiveUp() {
   });
 }
 
+function setupStarterToggle() {
+  const toggle = document.getElementById("starter-toggle");
+  toggle.addEventListener("change", async () => {
+    startersOnly = toggle.checked;
+    console.log("Starter filter changed:", startersOnly);
+    
+    // Reset game with new filter
+    const guesses = document.getElementById("guesses-container");
+    guesses.innerHTML = "";
+    resetHintVisuals();
+    
+    // Fetch new players with filter
+    await fetchPlayers();
+  });
+}
+
 function init() {
   setupModeSelection();
   setupBackButton();
@@ -459,6 +490,7 @@ function init() {
   setupGiveUp();
   setupAutocomplete();
   setupHintButton();
+  setupStarterToggle();
   fetchPlayers();
 }
 

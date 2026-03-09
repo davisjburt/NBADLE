@@ -1,11 +1,14 @@
 # app.py
 
-from flask import Flask, jsonify, render_template
-from config import TEAM_LOGO_IDS, PYTHON_FALLBACK_ROSTER
+from flask import Flask, jsonify, render_template, request
+from config import TEAM_LOGO_IDS, PYTHON_FALLBACK_ROSTER, add_starter_status_to_fallback
 from nba_data import load_from_cache, fetch_players_from_nba
 
 app = Flask(__name__)
 app.config["DEBUG"] = True
+
+# Initialize starter status for fallback roster
+add_starter_status_to_fallback()
 
 
 @app.route("/")
@@ -20,17 +23,25 @@ def favicon():
 
 @app.route("/api/players")
 def get_players():
+    starters_only = request.args.get('starters_only', 'false').lower() == 'true'
+    
     cached = load_from_cache()
     if cached:
         print("\nLoaded player data from cache.")
-        return jsonify(cached)
-
-    try:
-        players = fetch_players_from_nba()
-        return jsonify(players)
-    except Exception as e:
-        print(f"Critical backend error: {e}. Using fallback roster.")
-        return jsonify(PYTHON_FALLBACK_ROSTER)
+        players = cached
+    else:
+        try:
+            players = fetch_players_from_nba()
+        except Exception as e:
+            print(f"Critical backend error: {e}. Using fallback roster.")
+            players = PYTHON_FALLBACK_ROSTER
+    
+    # Filter by starters if requested
+    if starters_only:
+        players = [p for p in players if p.get('is_starter', False)]
+        print(f"Filtered to {len(players)} starters.")
+    
+    return jsonify(players)
 
 
 @app.route("/api/player_image/<player_id>")

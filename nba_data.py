@@ -22,22 +22,23 @@ from config import (
 
 def load_from_cache():
     if not os.path.exists(CACHE_FILE):
+        print("No cache file found.")
         return None
     try:
         with open(CACHE_FILE, "r") as f:
             data = json.load(f)
     except json.JSONDecodeError:
+        print("Cache file is corrupted.")
         return None
 
     if isinstance(data, dict) and "players" in data and "_timestamp" in data:
-        age = time.time() - data["_timestamp"]
-        if age < CACHE_EXPIRATION:
-            return data["players"]
-        return None
+        print(f"Cache found with {len(data['players'])} players.")
+        return data["players"]
 
-    file_age = time.time() - os.path.getmtime(CACHE_FILE)
-    if file_age < CACHE_EXPIRATION:
+    if isinstance(data, list):
+        print(f"Cache found (legacy format) with {len(data)} players.")
         return data
+
     return None
 
 
@@ -48,38 +49,32 @@ def save_to_cache(players):
 
 
 def is_starter(player):
-    """Determine if a player is likely a starter based on stats thresholds."""
-    pts = player.get('pts', 0)
-    reb = player.get('reb', 0)
-    ast = player.get('ast', 0)
-    stl = player.get('stl', 0)
-    blk = player.get('blk', 0)
+    pts  = player.get('pts', 0)
+    reb  = player.get('reb', 0)
+    ast  = player.get('ast', 0)
+    stl  = player.get('stl', 0)
+    blk  = player.get('blk', 0)
     fg3m = player.get('fg3m', 0)
-    
-    # Starter criteria: meeting any of these thresholds
-    if pts >= 12:  # 12+ points per game
-        return True
-    if reb >= 7:   # 7+ rebounds per game
-        return True
-    if ast >= 5:   # 5+ assists per game
-        return True
-    if stl >= 1.5: # 1.5+ steals per game
-        return True
-    if blk >= 1.5: # 1.5+ blocks per game
-        return True
-    if fg3m >= 2.5: # 2.5+ 3-pointers per game
-        return True
-    
-    # Combined impact score
+
+    if pts  >= 12:  return True
+    if reb  >= 7:   return True
+    if ast  >= 5:   return True
+    if stl  >= 1.5: return True
+    if blk  >= 1.5: return True
+    if fg3m >= 2.5: return True
+
     impact_score = pts + (reb * 1.2) + (ast * 1.5) + (stl * 3) + (blk * 3) + (fg3m * 2)
     return impact_score >= 18
 
 
 def fetch_players_from_nba():
+    # Always check cache first — on Render this will be the committed JSON file
     cached = load_from_cache()
     if cached:
         print(f"Using cached players ({len(cached)})")
         return cached
+
+    print("No cache available. Attempting NBA API fetch...")
 
     custom_headers = {
         "Host": "stats.nba.com",
@@ -101,14 +96,14 @@ def fetch_players_from_nba():
     }
 
     try:
-        print("\nFetching player bio stats from NBA API...")
+        print("Fetching player bio stats from NBA API...")
         df_bio = None
         for i in range(2):
             try:
                 bio_stats = leaguedashplayerbiostats.LeagueDashPlayerBioStats(
                     season=SEASON_FOR_BIO,
                     headers=custom_headers,
-                    timeout=15,
+                    timeout=3,
                 )
                 df_temp = bio_stats.get_data_frames()[0]
                 if not df_temp.empty:
@@ -119,10 +114,10 @@ def fetch_players_from_nba():
             time.sleep(1)
 
         if df_bio is None or df_bio.empty:
-            print("NBA API blocked the bio request. Using Python fallback roster.")
+            print("NBA API unavailable. Using fallback roster.")
             return PYTHON_FALLBACK_ROSTER
 
-        print("Fetching player index for positions and jersey numbers...")
+        print("Fetching player index...")
         df_idx = None
         for i in range(2):
             try:
@@ -130,7 +125,7 @@ def fetch_players_from_nba():
                 idx = playerindex.PlayerIndex(
                     season=SEASON_FOR_BIO,
                     headers=custom_headers,
-                    timeout=15,
+                    timeout=3,
                 )
                 df_temp = idx.get_data_frames()[0]
                 if not df_temp.empty:
@@ -141,7 +136,6 @@ def fetch_players_from_nba():
             time.sleep(1)
 
         if df_idx is None or df_idx.empty:
-            print("Warning: PlayerIndex blocked. Defaulting POSITION/JERSEY_NUMBER.")
             df_bio["POSITION"] = "G"
             df_bio["JERSEY_NUMBER"] = "0"
             df = df_bio
@@ -157,17 +151,17 @@ def fetch_players_from_nba():
 
         df = df[df["TEAM_ABBREVIATION"].isin(TEAM_INFO.keys())].copy()
 
-        print("Fetching season averages for stats mode...")
+        print("Fetching season averages...")
         df_stats = None
-        for i in range(3):
+        for i in range(2):
             try:
-                time.sleep(0.75 + random.uniform(0, 0.5))
+                time.sleep(0.5)
                 stats_ep = leaguedashplayerstats.LeagueDashPlayerStats(
                     season=SEASON_FOR_STATS,
                     per_mode_detailed="PerGame",
                     measure_type_detailed_defense="Base",
                     headers=custom_headers,
-                    timeout=25,
+                    timeout=3,
                 )
                 df_temp = stats_ep.get_data_frames()[0]
                 if not df_temp.empty:
@@ -175,107 +169,83 @@ def fetch_players_from_nba():
                     break
             except Exception as e:
                 print(f"Season Stats attempt {i+1} failed: {e}")
-            time.sleep(1.5 * (i + 1) + random.random())
+            time.sleep(1)
 
         stat_cols = ["PTS", "REB", "AST", "STL", "BLK", "FG3M"]
 
         if df_stats is not None and not df_stats.empty:
             df_stats = df_stats[["PLAYER_ID"] + stat_cols]
-            print("Stats rows:", len(df_stats))
-            df = pd.merge(
-                df,
-                df_stats,
-                on="PLAYER_ID",
-                how="left",
-                suffixes=("", "_STAT"),
-            )
+            df = pd.merge(df, df_stats, on="PLAYER_ID", how="left", suffixes=("", "_STAT"))
             for col in stat_cols:
                 stat_col = f"{col}_STAT"
                 if stat_col in df.columns:
                     df[col] = df[stat_col].fillna(df.get(col, 0.0))
                     df.drop(columns=[stat_col], inplace=True)
-        else:
-            print("Stats missing; stat columns will default to 0.0.")
 
         players = []
         for _, row in df.iterrows():
 
             def get_safe_int(col, default=0):
                 val = row.get(col, default)
-                if pd.isna(val) or val == "":
-                    return default
-                try:
-                    return int(float(val))
-                except Exception:
-                    return default
+                if pd.isna(val) or val == "": return default
+                try: return int(float(val))
+                except: return default
 
             def get_safe_str(col, default="Unknown"):
                 val = row.get(col, default)
-                if pd.isna(val):
-                    return default
+                if pd.isna(val): return default
                 return str(val).strip()
 
             def get_safe_float(col, default=0.0):
                 val = row.get(col, default)
-                if pd.isna(val) or val == "":
-                    return default
-                try:
-                    return float(val)
-                except Exception:
-                    return default
+                if pd.isna(val) or val == "": return default
+                try: return float(val)
+                except: return default
 
             h_inches = get_safe_int("PLAYER_HEIGHT_INCHES", 78)
-            feet = h_inches // 12
-            inches = h_inches % 12
-
+            feet, inches = h_inches // 12, h_inches % 12
             team_abbr = get_safe_str("TEAM_ABBREVIATION", "Unknown")
             team_data = TEAM_INFO.get(team_abbr, {"conf": "Unknown", "div": "Unknown"})
-
             pos = get_safe_str("POSITION", "G")
-            if not pos or pos == "Unknown":
-                pos = "G"
+            if not pos or pos == "Unknown": pos = "G"
 
-            pts = get_safe_float("PTS", 0.0)
-            reb = get_safe_float("REB", 0.0)
-            ast = get_safe_float("AST", 0.0)
-            stl = get_safe_float("STL", 0.0)
-            blk = get_safe_float("BLK", 0.0)
-            fg3m = get_safe_float("FG3M", 0.0)
+            pts  = get_safe_float("PTS")
+            reb  = get_safe_float("REB")
+            ast  = get_safe_float("AST")
+            stl  = get_safe_float("STL")
+            blk  = get_safe_float("BLK")
+            fg3m = get_safe_float("FG3M")
 
             if pts > 60 or reb > 40 or ast > 40 or stl > 20 or blk > 20 or fg3m > 20:
                 pts = reb = ast = stl = blk = fg3m = 0.0
 
-            players.append(
-                {
-                    "id": get_safe_int("PLAYER_ID", 0),
-                    "name": get_safe_str("PLAYER_NAME", "Unknown"),
-                    "team": team_abbr,
-                    "conf": team_data["conf"],
-                    "div": team_data["div"],
-                    "pos": pos,
-                    "height": f"{feet}'{inches}\"",
-                    "age": get_safe_int("AGE", 25),
-                    "number": get_safe_int("JERSEY_NUMBER", 0),
-                    "pts": pts,
-                    "reb": reb,
-                    "ast": ast,
-                    "stl": stl,
-                    "blk": blk,
-                    "fg3m": fg3m,
-                    "is_starter": is_starter({
-                        "pts": pts, "reb": reb, "ast": ast, 
-                        "stl": stl, "blk": blk, "fg3m": fg3m
-                    })
-                }
-            )
+            players.append({
+                "id":         get_safe_int("PLAYER_ID"),
+                "name":       get_safe_str("PLAYER_NAME"),
+                "team":       team_abbr,
+                "conf":       team_data["conf"],
+                "div":        team_data["div"],
+                "pos":        pos,
+                "height":     f"{feet}'{inches}\"",
+                "age":        get_safe_int("AGE", 25),
+                "number":     get_safe_int("JERSEY_NUMBER"),
+                "pts":        pts,
+                "reb":        reb,
+                "ast":        ast,
+                "stl":        stl,
+                "blk":        blk,
+                "fg3m":       fg3m,
+                "is_starter": is_starter({"pts": pts, "reb": reb, "ast": ast,
+                                          "stl": stl, "blk": blk, "fg3m": fg3m})
+            })
 
         if players:
             save_to_cache(players)
-            print(f"Successfully compiled and cached {len(players)} players!")
+            print(f"Successfully fetched and cached {len(players)} players.")
             return players
 
         return PYTHON_FALLBACK_ROSTER
 
     except Exception as e:
-        print(f"Critical fetch crash: {e}. Using Python fallback roster.")
+        print(f"Critical fetch error: {e}. Using fallback roster.")
         return PYTHON_FALLBACK_ROSTER

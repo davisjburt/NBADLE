@@ -3,13 +3,6 @@
 import os
 import time
 import json
-import random
-import pandas as pd
-from nba_api.stats.endpoints import (
-    leaguedashplayerbiostats,
-    playerindex,
-    leaguedashplayerstats,
-)
 from config import (
     CACHE_FILE,
     CACHE_EXPIRATION,
@@ -68,13 +61,26 @@ def is_starter(player):
 
 
 def fetch_players_from_nba():
-    # Always check cache first — on Render this will be the committed JSON file
+    # Always check cache first — avoids loading heavy libraries entirely
     cached = load_from_cache()
     if cached:
         print(f"Using cached players ({len(cached)})")
         return cached
 
-    print("No cache available. Attempting NBA API fetch...")
+    print("No cache available. Attempting NBA API fetch (loading heavy deps)...")
+
+    # Only import heavy libraries if cache miss — saves memory on Render
+    try:
+        import random
+        import pandas as pd
+        from nba_api.stats.endpoints import (
+            leaguedashplayerbiostats,
+            playerindex,
+            leaguedashplayerstats,
+        )
+    except ImportError as e:
+        print(f"Failed to import dependencies: {e}. Using fallback roster.")
+        return PYTHON_FALLBACK_ROSTER
 
     custom_headers = {
         "Host": "stats.nba.com",

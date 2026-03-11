@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
     <title>NBADLE</title>
     <link
       rel="stylesheet"
@@ -189,6 +192,50 @@
         </div>
 
         <button class="btn-primary" id="help-close-btn">Got It!</button>
+      </div>
+    </div>
+
+    <!-- On-screen keyboard (touch devices only) -->
+    <div id="onscreen-keyboard" class="osk" aria-hidden="true">
+      <div class="osk-row">
+        <button class="osk-key" data-char="Q">Q</button>
+        <button class="osk-key" data-char="W">W</button>
+        <button class="osk-key" data-char="E">E</button>
+        <button class="osk-key" data-char="R">R</button>
+        <button class="osk-key" data-char="T">T</button>
+        <button class="osk-key" data-char="Y">Y</button>
+        <button class="osk-key" data-char="U">U</button>
+        <button class="osk-key" data-char="I">I</button>
+        <button class="osk-key" data-char="O">O</button>
+        <button class="osk-key" data-char="P">P</button>
+      </div>
+      <div class="osk-row">
+        <button class="osk-key" data-char="A">A</button>
+        <button class="osk-key" data-char="S">S</button>
+        <button class="osk-key" data-char="D">D</button>
+        <button class="osk-key" data-char="F">F</button>
+        <button class="osk-key" data-char="G">G</button>
+        <button class="osk-key" data-char="H">H</button>
+        <button class="osk-key" data-char="J">J</button>
+        <button class="osk-key" data-char="K">K</button>
+        <button class="osk-key" data-char="L">L</button>
+        <button class="osk-key osk-key--special" data-char="'">'</button>
+      </div>
+      <div class="osk-row">
+        <button class="osk-key osk-key--special" data-char="-">-</button>
+        <button class="osk-key" data-char="Z">Z</button>
+        <button class="osk-key" data-char="X">X</button>
+        <button class="osk-key" data-char="C">C</button>
+        <button class="osk-key" data-char="V">V</button>
+        <button class="osk-key" data-char="B">B</button>
+        <button class="osk-key" data-char="N">N</button>
+        <button class="osk-key" data-char="M">M</button>
+        <button class="osk-key osk-key--special" data-char=".">.</button>
+        <button class="osk-key osk-key--back" id="osk-backspace">⌫</button>
+      </div>
+      <div class="osk-row osk-row--bottom">
+        <button class="osk-key osk-key--space" data-char=" ">SPACE</button>
+        <button class="osk-key osk-key--enter" id="osk-enter">ENTER</button>
       </div>
     </div>
 

@@ -527,6 +527,152 @@ function setupStarterToggle() {
   });
 }
 
+// ── On-screen keyboard ─────────────────────────────────────
+function setupOnscreenKeyboard() {
+  // Only activate on touch devices
+  const isTouchDevice = window.matchMedia("(hover: none)").matches;
+  if (!isTouchDevice) return;
+
+  const keyboard = document.getElementById("onscreen-keyboard");
+  const input = document.getElementById("player-input");
+  const backspace = document.getElementById("osk-backspace");
+  const enterBtn = document.getElementById("osk-enter");
+
+  if (!keyboard || !input) return;
+
+  // Prevent native keyboard from appearing — use readonly
+  input.setAttribute("readonly", "readonly");
+  input.setAttribute("inputmode", "none");
+
+  // Show keyboard when input is focused (tapped)
+  input.addEventListener("focus", () => {
+    keyboard.classList.add("osk--visible");
+    document.body.classList.add("osk-open");
+  });
+
+  // Key press handler
+  function pressKey(char) {
+    if (gameOver) return;
+    // Flash visual feedback
+    const key = keyboard.querySelector(`[data-char="${CSS.escape(char)}"]`);
+    if (key) {
+      key.classList.add("osk-key--pressed");
+      setTimeout(() => key.classList.remove("osk-key--pressed"), 120);
+    }
+
+    // Insert character
+    input.value += char;
+
+    // Trigger the input event so autocomplete updates
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  // Wire up all letter/char keys
+  keyboard.querySelectorAll(".osk-key[data-char]").forEach((key) => {
+    key.addEventListener(
+      "touchstart",
+      (e) => {
+        e.preventDefault(); // prevent double-fire
+        pressKey(key.dataset.char);
+      },
+      { passive: false },
+    );
+
+    // Fallback for non-touch click (dev testing)
+    key.addEventListener("click", () => pressKey(key.dataset.char));
+  });
+
+  // Backspace
+  function doBackspace() {
+    if (gameOver) return;
+    backspace.classList.add("osk-key--pressed");
+    setTimeout(() => backspace.classList.remove("osk-key--pressed"), 120);
+    input.value = input.value.slice(0, -1);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  backspace.addEventListener(
+    "touchstart",
+    (e) => {
+      e.preventDefault();
+      doBackspace();
+    },
+    { passive: false },
+  );
+  backspace.addEventListener("click", doBackspace);
+
+  // Hold backspace to delete continuously
+  let backspaceInterval = null;
+  backspace.addEventListener(
+    "touchstart",
+    () => {
+      backspaceInterval = setTimeout(() => {
+        backspaceInterval = setInterval(doBackspace, 80);
+      }, 400);
+    },
+    { passive: true },
+  );
+
+  const stopBackspace = () => {
+    clearTimeout(backspaceInterval);
+    clearInterval(backspaceInterval);
+    backspaceInterval = null;
+  };
+
+  backspace.addEventListener("touchend", stopBackspace);
+  backspace.addEventListener("touchcancel", stopBackspace);
+
+  // Enter key — find exact match and submit
+  function doEnter() {
+    if (gameOver) return;
+    enterBtn.classList.add("osk-key--pressed");
+    setTimeout(() => enterBtn.classList.remove("osk-key--pressed"), 120);
+
+    const val = input.value.trim();
+    if (!val) return;
+
+    const exactMatch = players.find(
+      (p) => p.name.toLowerCase() === val.toLowerCase(),
+    );
+
+    if (exactMatch) {
+      processGuess(exactMatch.name);
+      input.value = "";
+      document.getElementById("autocomplete-list").innerHTML = "";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  }
+
+  enterBtn.addEventListener(
+    "touchstart",
+    (e) => {
+      e.preventDefault();
+      doEnter();
+    },
+    { passive: false },
+  );
+  enterBtn.addEventListener("click", doEnter);
+
+  // Tapping an autocomplete suggestion should also hide keyboard after
+  document.getElementById("autocomplete-list").addEventListener("click", () => {
+    input.value = "";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+
+  // Hide keyboard when tapping outside input or keyboard
+  document.addEventListener(
+    "touchstart",
+    (e) => {
+      if (!keyboard.contains(e.target) && e.target !== input) {
+        keyboard.classList.remove("osk--visible");
+        document.body.classList.remove("osk-open");
+        input.blur();
+      }
+    },
+    { passive: true },
+  );
+}
+
 // ── Init ───────────────────────────────────────────────────
 function init() {
   setupModeSelection();
@@ -537,6 +683,7 @@ function init() {
   setupHintButton();
   setupStarterToggle();
   setupHelpButton();
+  setupOnscreenKeyboard();
   fetchPlayers();
 }
 

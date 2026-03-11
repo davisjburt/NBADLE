@@ -1060,3 +1060,133 @@ input:checked + .slider:before {
     padding: 20px 24px;
   }
 }
+
+/* ============================================================
+   ON-SCREEN KEYBOARD
+   Hidden by default, shown only on touch devices in-game
+   ============================================================ */
+.osk {
+  display: none; /* JS shows it on touch devices */
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 500;
+  background: #f0f0f0;
+  border-top: 3px solid #333;
+  box-shadow: 0 -3px 0 #111;
+  padding: 8px 6px 10px;
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
+  flex-direction: column;
+  gap: 5px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Only ever show on touch devices */
+@media (hover: none) {
+  .osk.osk--visible {
+    display: flex;
+  }
+
+  /* Push page content up so keyboard doesn't cover the board */
+  body.osk-open {
+    padding-bottom: 220px;
+  }
+}
+
+.osk-row {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+}
+
+.osk-row--bottom {
+  gap: 6px;
+}
+
+/* Base key style — matches page button system */
+.osk-key {
+  background: #fff;
+  border: 2px solid #333;
+  box-shadow: 2px 2px 0 #333;
+  border-radius: 5px;
+  font-family: "Verdana", sans-serif;
+  font-size: 13px;
+  font-weight: bold;
+  color: #111;
+  height: 42px;
+  min-width: 30px;
+  flex: 1;
+  max-width: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    transform 0.08s,
+    box-shadow 0.08s,
+    background 0.08s;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  padding: 0;
+}
+
+.osk-key:active,
+.osk-key.osk-key--pressed {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 #333;
+  background: #e8e8e8;
+}
+
+/* Special character keys (', -, .) — slightly muted */
+.osk-key--special {
+  background: #ebebeb;
+  font-size: 15px;
+  max-width: 38px;
+}
+
+/* Backspace */
+.osk-key--back {
+  background: #fff0ef;
+  border-color: #333;
+  color: #c0392b;
+  font-size: 16px;
+  max-width: 48px;
+  flex: 1.4;
+}
+
+.osk-key--back:active,
+.osk-key--back.osk-key--pressed {
+  background: #fde0de;
+}
+
+/* Space bar */
+.osk-key--space {
+  flex: 3;
+  max-width: none;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: #f8f8f8;
+}
+
+/* Enter / submit */
+.osk-key--enter {
+  flex: 2;
+  max-width: none;
+  background: #333;
+  color: #fff;
+  border-color: #111;
+  box-shadow: 2px 2px 0 #111;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.osk-key--enter:active,
+.osk-key--enter.osk-key--pressed {
+  background: #111;
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 #111;
+}

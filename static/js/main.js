@@ -490,18 +490,19 @@ function setupOnscreenKeyboard() {
   const backspace = document.getElementById("osk-backspace");
   const enterBtn = document.getElementById("osk-enter");
 
-  // Prevent native keyboard
-  input.setAttribute("readonly", "readonly");
+  // Allow the native blinking caret, but prevent the native keyboard
+  input.removeAttribute("readonly");
   input.setAttribute("inputmode", "none");
 
-  // Show keyboard when input tapped
+  // Show keyboard and focus input to display the caret
   input.addEventListener(
     "touchstart",
     (e) => {
-      e.preventDefault();
+      // No preventDefault() here so the input can actually receive focus natively
       showOsk();
+      setTimeout(() => input.focus({ preventScroll: true }), 50);
     },
-    { passive: false },
+    { passive: true },
   );
 
   function flash(el) {
@@ -515,6 +516,7 @@ function setupOnscreenKeyboard() {
     input.value += char;
     input.dispatchEvent(new Event("input", { bubbles: true }));
     flash(keyboard.querySelector(`[data-char="${char}"]`));
+    input.focus({ preventScroll: true });
   }
 
   // All letter/char keys
@@ -538,6 +540,7 @@ function setupOnscreenKeyboard() {
     input.value = input.value.slice(0, -1);
     input.dispatchEvent(new Event("input", { bubbles: true }));
     flash(backspace);
+    input.focus({ preventScroll: true });
   }
 
   backspace.addEventListener(
@@ -559,37 +562,38 @@ function setupOnscreenKeyboard() {
   backspace.addEventListener("touchend", stopBs);
   backspace.addEventListener("touchcancel", stopBs);
 
-  // Enter
+  // Enter Button
   enterBtn.addEventListener(
     "touchstart",
     (e) => {
       e.preventDefault();
       flash(enterBtn);
       if (gameOver) return;
-      const val = input.value.trim();
-      const match = players.find(
-        (p) => p.name.toLowerCase() === val.toLowerCase(),
-      );
+
+      const val = input.value.trim().toLowerCase();
+
+      // Check for an exact typed match first
+      let match = players.find((p) => p.name.toLowerCase() === val);
+
+      // If no exact match, grab the first available suggestion in the autocomplete list
+      if (!match) {
+        const list = document.getElementById("autocomplete-list");
+        if (list.firstChild) {
+          const firstSuggestion = list.firstChild.textContent;
+          match = players.find((p) => p.name === firstSuggestion);
+        }
+      }
+
       if (match) {
         processGuess(match.name);
         input.value = "";
         document.getElementById("autocomplete-list").innerHTML = "";
         input.dispatchEvent(new Event("input", { bubbles: true }));
       }
+
+      input.focus({ preventScroll: true });
     },
     { passive: false },
-  );
-
-  // Tapping autocomplete option — clear input after
-  document.getElementById("autocomplete-list").addEventListener(
-    "touchstart",
-    () => {
-      setTimeout(() => {
-        input.value = "";
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-      }, 80);
-    },
-    { passive: true },
   );
 }
 

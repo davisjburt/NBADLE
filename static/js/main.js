@@ -1,5 +1,7 @@
 // static/js/main.js
 
+const MAX_GUESSES = 8;
+
 let players = Array.isArray(fallbackPlayers) ? [...fallbackPlayers] : [];
 let targetPlayer =
   players.length > 0
@@ -8,7 +10,24 @@ let targetPlayer =
 let targetImages = null;
 let currentMode = "classic";
 let startersOnly = false;
+let guessCount = 0;
+let gameOver = false;
 
+// ── Guess counter ──────────────────────────────────────────
+function updateGuessCounter() {
+  const el = document.getElementById("guess-count");
+  if (el) el.textContent = guessCount;
+}
+
+function resetGuessCounter() {
+  guessCount = 0;
+  gameOver = false;
+  updateGuessCounter();
+  const input = document.getElementById("player-input");
+  if (input) input.disabled = false;
+}
+
+// ── Player fetching ────────────────────────────────────────
 async function fetchPlayers() {
   const loader = document.getElementById("loading-indicator");
   loader.style.display = "block";
@@ -23,16 +42,11 @@ async function fetchPlayers() {
       targetImages = null;
       await loadTargetImages();
       console.log("Live data loaded: " + players.length + " players.");
-      if (startersOnly) {
-        console.log("Filtered to starters only.");
-      }
     }
   } catch (err) {
     console.warn("Backend unavailable. Using fallback data.", err);
-    // Apply starter filter to fallback data if needed
     if (startersOnly) {
-      players = fallbackPlayers.filter(p => p.is_starter);
-      console.log("Using fallback data filtered to starters: " + players.length + " players.");
+      players = fallbackPlayers.filter((p) => p.is_starter);
     } else {
       players = fallbackPlayers;
     }
@@ -60,6 +74,7 @@ async function loadTargetImages() {
   }
 }
 
+// ── Comparison helpers ─────────────────────────────────────
 function parseHeight(hStr) {
   if (!hStr) return 0;
   const parts = hStr.split("'");
@@ -94,9 +109,14 @@ function checkNumberVal(guessVal, targetVal, threshold) {
   return { status, arrow };
 }
 
+// ── Guess processing ───────────────────────────────────────
 function processGuess(guessName) {
+  if (gameOver) return;
   const guess = players.find((p) => p.name === guessName);
   if (!guess || !targetPlayer) return;
+
+  guessCount++;
+  updateGuessCounter();
 
   if (currentMode === "classic") {
     const stats = {
@@ -145,7 +165,6 @@ function processGuess(guessName) {
     const gStl = Number(guess.stl ?? 0);
     const gBlk = Number(guess.blk ?? 0);
     const g3m = Number(guess.fg3m ?? 0);
-
     const tPts = Number(targetPlayer.pts ?? 0);
     const tReb = Number(targetPlayer.reb ?? 0);
     const tAst = Number(targetPlayer.ast ?? 0);
@@ -197,10 +216,12 @@ function processGuess(guessName) {
   }
 }
 
+// ── Render ─────────────────────────────────────────────────
 function renderRow(stats, cells) {
   const container = document.getElementById("guesses-container");
   const row = document.createElement("div");
   row.className = "guess-row";
+
   cells.forEach((c) => {
     const div = document.createElement("div");
     const baseClass = c === "name" ? "name-cell" : "";
@@ -216,16 +237,31 @@ function renderRow(stats, cells) {
     }
     row.appendChild(div);
   });
+
   container.insertBefore(row, container.firstChild);
-  if (stats.name === targetPlayer.name) triggerWin();
+
+  const won = stats.name === targetPlayer.name;
+  const outOfGuesses = guessCount >= MAX_GUESSES;
+
+  if (won) {
+    gameOver = true;
+    document.getElementById("player-input").disabled = true;
+    setTimeout(() => showWinModal(false), 500);
+  } else if (outOfGuesses) {
+    gameOver = true;
+    document.getElementById("player-input").disabled = true;
+    setTimeout(() => showWinModal(true), 500);
+  }
 }
 
+// ── Modals ─────────────────────────────────────────────────
 function showWinModal(gaveUp) {
   document.getElementById("win-name").textContent = targetPlayer.name;
   const titleEl = document.getElementById("win-title");
   const imgEl = document.getElementById("headshot-img");
 
   titleEl.textContent = gaveUp ? "The Player Was" : "You Got It!";
+  titleEl.style.color = gaveUp ? "#c0392b" : "#27ae60";
 
   if (targetImages && targetImages.headshot) {
     imgEl.src = targetImages.headshot;
@@ -237,15 +273,27 @@ function showWinModal(gaveUp) {
   document.getElementById("win-modal").style.display = "flex";
 }
 
-function triggerWin() {
-  setTimeout(() => {
-    showWinModal(false);
-  }, 500);
+function setupHelpButton() {
+  const helpBtn = document.getElementById("help-button");
+  const helpModal = document.getElementById("help-modal");
+  const closeBtn = document.getElementById("help-close-btn");
+
+  helpBtn.addEventListener("click", () => {
+    helpModal.style.display = "flex";
+  });
+  closeBtn.addEventListener("click", () => {
+    helpModal.style.display = "none";
+  });
+  helpModal.addEventListener("click", (e) => {
+    if (e.target === helpModal) helpModal.style.display = "none";
+  });
 }
 
+// ── Autocomplete ───────────────────────────────────────────
 function setupAutocomplete() {
   const input = document.getElementById("player-input");
   const list = document.getElementById("autocomplete-list");
+
   input.addEventListener("input", function () {
     list.innerHTML = "";
     if (!this.value) return;
@@ -263,9 +311,11 @@ function setupAutocomplete() {
       list.appendChild(div);
     });
   });
+
   document.addEventListener("click", function (e) {
     if (e.target !== input) list.innerHTML = "";
   });
+
   input.addEventListener("keydown", function (e) {
     if (e.key === "Enter") {
       const guessName = this.value.trim();
@@ -283,6 +333,7 @@ function setupAutocomplete() {
   });
 }
 
+// ── Hint button ────────────────────────────────────────────
 function setupHintButton() {
   const btn = document.getElementById("hint-button");
   const placeholder = document.getElementById("silhouette-placeholder");
@@ -331,16 +382,15 @@ async function generateSilhouetteFromHeadshot(headshotUrl) {
   const ctx = canvas.getContext("2d");
   return new Promise((resolve) => {
     imgEl.onload = () => {
-      const w = 200;
-      const h = 190;
+      const w = 200,
+        h = 190;
       canvas.width = w;
       canvas.height = h;
       ctx.drawImage(imgEl, 0, 0, w, h);
       const imageData = ctx.getImageData(0, 0, w, h);
       const data = imageData.data;
       for (let i = 0; i < data.length; i += 4) {
-        const alpha = data[i + 3];
-        if (alpha > 0) {
+        if (data[i + 3] > 0) {
           data[i] = 0;
           data[i + 1] = 0;
           data[i + 2] = 0;
@@ -358,6 +408,7 @@ async function generateSilhouetteFromHeadshot(headshotUrl) {
   });
 }
 
+// ── Reset helpers ──────────────────────────────────────────
 function resetHintVisuals() {
   const silhouetteImgEl = document.getElementById("silhouette-img");
   const teamLogoImgEl = document.getElementById("team-logo-img");
@@ -372,41 +423,37 @@ function resetHintVisuals() {
     teamLogoImgEl.style.display = "none";
     teamLogoImgEl.src = "";
   }
-  if (placeholderEl) placeholderEl.style.display = "block";
+  if (placeholderEl) placeholderEl.style.display = "flex";
   if (hintBtn) {
     hintBtn.disabled = false;
     hintBtn.textContent = "Show Hint";
   }
 }
 
+// ── Mode selection ─────────────────────────────────────────
 function setupModeSelection() {
   const startScreen = document.getElementById("start-screen");
   const gameScreen = document.getElementById("game-screen");
   const title = document.getElementById("game-title");
   const classicHeader = document.getElementById("classic-header");
   const statsHeader = document.getElementById("stats-header");
-  const hintPanel = document.querySelector(".hint-panel");
 
   document.querySelectorAll(".mode-btn").forEach((btn) => {
     if (!btn.dataset.mode) return;
     btn.addEventListener("click", async () => {
       currentMode = btn.dataset.mode;
-      if (currentMode === "classic") {
-        title.textContent = "NBADLE – Classic";
-        classicHeader.style.display = "flex";
-        statsHeader.style.display = "none";
-      } else {
-        title.textContent = "NBADLE – Stats";
-        classicHeader.style.display = "none";
-        statsHeader.style.display = "flex";
-      }
-      hintPanel.style.display = "block";
+      title.textContent =
+        currentMode === "classic" ? "NBADLE – Classic" : "NBADLE – Stats";
+      classicHeader.style.display = currentMode === "classic" ? "flex" : "none";
+      statsHeader.style.display = currentMode === "stats" ? "flex" : "none";
 
       resetHintVisuals();
+      resetGuessCounter();
 
       startScreen.style.display = "none";
       gameScreen.style.display = "block";
       document.getElementById("guesses-container").innerHTML = "";
+
       if (players.length > 0) {
         targetPlayer = players[Math.floor(Math.random() * players.length)];
       }
@@ -417,6 +464,7 @@ function setupModeSelection() {
   });
 }
 
+// ── Back button ────────────────────────────────────────────
 function setupBackButton() {
   const backBtn = document.getElementById("back-button");
   const startScreen = document.getElementById("start-screen");
@@ -426,10 +474,9 @@ function setupBackButton() {
   backBtn.addEventListener("click", () => {
     guesses.innerHTML = "";
     resetHintVisuals();
-
+    resetGuessCounter();
     gameScreen.style.display = "none";
     startScreen.style.display = "block";
-
     if (players.length > 0) {
       targetPlayer = players[Math.floor(Math.random() * players.length)];
       targetImages = null;
@@ -437,6 +484,7 @@ function setupBackButton() {
   });
 }
 
+// ── Play again ─────────────────────────────────────────────
 function setupPlayAgain() {
   const btn = document.getElementById("play-again-btn");
   const modal = document.getElementById("win-modal");
@@ -446,6 +494,7 @@ function setupPlayAgain() {
     modal.style.display = "none";
     guesses.innerHTML = "";
     resetHintVisuals();
+    resetGuessCounter();
     if (players.length > 0) {
       targetPlayer = players[Math.floor(Math.random() * players.length)];
     }
@@ -455,34 +504,30 @@ function setupPlayAgain() {
   });
 }
 
+// ── Give up ────────────────────────────────────────────────
 function setupGiveUp() {
   const btn = document.getElementById("give-up-button");
-  const guesses = document.getElementById("guesses-container");
 
   btn.addEventListener("click", () => {
     if (!targetPlayer) return;
-    guesses.innerHTML = "";
-    resetHintVisuals();
+    gameOver = true;
     showWinModal(true);
   });
 }
 
+// ── Starters toggle ────────────────────────────────────────
 function setupStarterToggle() {
   const toggle = document.getElementById("starter-toggle");
   toggle.addEventListener("change", async () => {
     startersOnly = toggle.checked;
-    console.log("Starter filter changed:", startersOnly);
-    
-    // Reset game with new filter
-    const guesses = document.getElementById("guesses-container");
-    guesses.innerHTML = "";
+    document.getElementById("guesses-container").innerHTML = "";
     resetHintVisuals();
-    
-    // Fetch new players with filter
+    resetGuessCounter();
     await fetchPlayers();
   });
 }
 
+// ── Init ───────────────────────────────────────────────────
 function init() {
   setupModeSelection();
   setupBackButton();
@@ -491,6 +536,7 @@ function init() {
   setupAutocomplete();
   setupHintButton();
   setupStarterToggle();
+  setupHelpButton();
   fetchPlayers();
 }
 

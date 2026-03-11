@@ -11,25 +11,49 @@
   </head>
   <body>
     <div class="container">
+      <!-- START SCREEN -->
       <div id="start-screen">
         <h1>NBADLE</h1>
-        <p>Choose a mode to start playing.</p>
-        <button class="mode-btn" data-mode="classic">Classic Mode</button>
-        <button class="mode-btn" data-mode="stats">Stats Mode</button>
+        <p class="start-subtitle">Guess the NBA player. New game every time.</p>
+        <div class="mode-buttons">
+          <button class="mode-btn" data-mode="classic">
+            <span class="mode-icon">🏀</span>
+            <span class="mode-label">Classic</span>
+            <span class="mode-desc">Team · Conf · Pos · Height · Age · #</span>
+          </button>
+          <button class="mode-btn" data-mode="stats">
+            <span class="mode-icon">📊</span>
+            <span class="mode-label">Stats</span>
+            <span class="mode-desc">PTS · REB · AST · STL · BLK · 3PM</span>
+          </button>
+        </div>
       </div>
 
+      <!-- GAME SCREEN -->
       <div id="game-screen" style="display: none">
+        <!-- 3-column header so title stays centered -->
         <div class="game-header">
-          <button id="back-button" class="back-btn" aria-label="Back">❮</button>
+          <div class="header-left">
+            <button
+              id="back-button"
+              class="icon-btn back-btn"
+              aria-label="Back"
+            >
+              ❮
+            </button>
+          </div>
           <h1 id="game-title">NBADLE – Classic</h1>
-          <div class="header-controls">
+          <div class="header-right">
             <div class="starter-filter">
               <label class="switch">
-                <input type="checkbox" id="starter-toggle">
+                <input type="checkbox" id="starter-toggle" />
                 <span class="slider"></span>
               </label>
               <span class="filter-label">Starters Only</span>
             </div>
+            <button id="help-button" class="icon-btn" aria-label="How to Play">
+              ?
+            </button>
             <button id="give-up-button" class="give-up-btn">Give Up</button>
           </div>
         </div>
@@ -38,33 +62,39 @@
           Fetching live roster data from NBA API...
         </div>
 
+        <!-- Search + Hint -->
         <div class="top-bar">
-          <div class="search-wrapper">
+          <div class="search-col">
             <div class="input-container">
               <input
                 type="text"
                 id="player-input"
-                placeholder="Guess a player..."
+                placeholder="Type a player name…"
                 autocomplete="off"
               />
               <div id="autocomplete-list" class="autocomplete-items"></div>
             </div>
+            <div class="guess-counter">
+              Guess <span id="guess-count">0</span> /
+              <span id="guess-max">8</span>
+            </div>
           </div>
 
           <div class="hint-panel">
-            <div class="hint-title"></div>
             <div class="hint-image-wrapper">
               <img id="silhouette-img" alt="Player Silhouette" />
               <img id="team-logo-img" alt="Team Logo" />
               <canvas id="silhouette-canvas"></canvas>
               <div id="silhouette-placeholder" class="hint-placeholder">
-                Click “Show Hint” for a clue.
+                <span class="hint-icon">🔍</span>
+                <span>Hint</span>
               </div>
             </div>
             <button id="hint-button">Show Hint</button>
           </div>
         </div>
 
+        <!-- Board -->
         <div class="board">
           <div class="header-row" id="classic-header">
             <div class="cell name-cell">Name</div>
@@ -93,15 +123,72 @@
       </div>
     </div>
 
+    <!-- Win / Give Up Modal -->
     <div id="win-modal" class="modal-overlay">
       <div class="modal-content">
         <h2 id="win-title">You Got It!</h2>
-        <p>
-          <br />
-          <strong id="win-name" style="font-size: 24px"></strong>
-        </p>
+        <p><strong id="win-name" style="font-size: 24px"></strong></p>
         <img id="headshot-img" src="" alt="Player Headshot" />
-        <button class="play-again-btn" id="play-again-btn">New Game</button>
+        <button class="btn-primary" id="play-again-btn">New Game</button>
+      </div>
+    </div>
+
+    <!-- Help Modal -->
+    <div id="help-modal" class="modal-overlay">
+      <div class="modal-content help-modal-content">
+        <h2 class="help-title">How to Play</h2>
+
+        <div class="help-modes">
+          <div class="help-mode-block">
+            <div class="help-mode-header">🏀 Classic</div>
+            <p>
+              Guess a player. Clues reveal
+              <strong>Team, Conf, Div, Position, Height, Age,</strong> and
+              <strong>Jersey #</strong>.
+            </p>
+          </div>
+          <div class="help-mode-block">
+            <div class="help-mode-header">📊 Stats</div>
+            <p>
+              Guess a player. Clues compare their
+              <strong>PTS, REB, AST, STL, BLK,</strong> and
+              <strong>3PM</strong> averages.
+            </p>
+          </div>
+        </div>
+
+        <div class="help-legend">
+          <div class="legend-heading">Color Guide</div>
+          <div class="legend-row">
+            <div class="legend-cell match"><div class="inner">LAL</div></div>
+            <span>Exact match</span>
+          </div>
+          <div class="legend-row">
+            <div class="legend-cell partial"><div class="inner">F-G</div></div>
+            <span>Close / partial match (e.g. overlapping position)</span>
+          </div>
+          <div class="legend-row">
+            <div class="legend-cell nomatch"><div class="inner">BOS</div></div>
+            <span>No match</span>
+          </div>
+          <div class="legend-row">
+            <span class="arrow-example">▲ ▼</span>
+            <span>Target stat is higher ▲ or lower ▼ than your guess</span>
+          </div>
+        </div>
+
+        <div class="help-extras">
+          <p>
+            💡 <strong>Show Hint</strong> reveals a silhouette (Classic) or team
+            logo (Stats).
+          </p>
+          <p>
+            ⭐ <strong>Starters Only</strong> limits the pool to impact players.
+          </p>
+          <p>🎯 You have <strong>8 guesses</strong> per game.</p>
+        </div>
+
+        <button class="btn-primary" id="help-close-btn">Got It!</button>
       </div>
     </div>
 

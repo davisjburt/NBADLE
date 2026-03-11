@@ -13,6 +13,9 @@ let startersOnly = false;
 let guessCount = 0;
 let gameOver = false;
 
+// Touch detection — most reliable cross-browser method
+const IS_TOUCH = navigator.maxTouchPoints > 0 || "ontouchstart" in window;
+
 // ── Guess counter ──────────────────────────────────────────
 function updateGuessCounter() {
   const el = document.getElementById("guess-count");
@@ -32,31 +35,25 @@ async function fetchPlayers() {
   const loader = document.getElementById("loading-indicator");
   loader.style.display = "block";
   try {
-    const startersParam = startersOnly ? "?starters_only=true" : "";
-    const response = await fetch("/api/players" + startersParam);
-    if (!response.ok) throw new Error("Server error");
-    const data = await response.json();
+    const q = startersOnly ? "?starters_only=true" : "";
+    const res = await fetch("/api/players" + q);
+    if (!res.ok) throw new Error("Server error");
+    const data = await res.json();
     if (Array.isArray(data) && data.length > 0) {
       players = data;
       targetPlayer = players[Math.floor(Math.random() * players.length)];
       targetImages = null;
       await loadTargetImages();
-      console.log("Live data loaded: " + players.length + " players.");
     }
   } catch (err) {
-    console.warn("Backend unavailable. Using fallback data.", err);
-    if (startersOnly) {
-      players = fallbackPlayers.filter((p) => p.is_starter);
-    } else {
-      players = fallbackPlayers;
-    }
-    if (players.length > 0) {
+    console.warn("Backend unavailable. Using fallback.", err);
+    players = startersOnly
+      ? fallbackPlayers.filter((p) => p.is_starter)
+      : [...fallbackPlayers];
+    if (players.length > 0)
       targetPlayer = players[Math.floor(Math.random() * players.length)];
-    }
   }
-  if (targetPlayer && !targetImages) {
-    await loadTargetImages();
-  }
+  if (targetPlayer && !targetImages) await loadTargetImages();
   loader.style.display = "none";
   document.getElementById("player-input").focus();
 }
@@ -65,47 +62,39 @@ async function loadTargetImages() {
   if (!targetPlayer) return;
   try {
     const res = await fetch("/api/player_image/" + targetPlayer.id);
-    if (!res.ok) throw new Error("image error");
     const json = await res.json();
     if (!json.headshot) throw new Error("no headshot");
     targetImages = json;
-  } catch (e) {
+  } catch {
     targetImages = null;
   }
 }
 
 // ── Comparison helpers ─────────────────────────────────────
-function parseHeight(hStr) {
-  if (!hStr) return 0;
-  const parts = hStr.split("'");
-  if (parts.length < 2) return 0;
-  return parseInt(parts[0]) * 12 + parseInt(parts[1].replace('"', ""));
+function parseHeight(h) {
+  if (!h) return 0;
+  const p = h.split("'");
+  return p.length < 2
+    ? 0
+    : parseInt(p[0]) * 12 + parseInt(p[1].replace('"', ""));
 }
 
-function checkMatch(guessVal, targetVal) {
-  return guessVal === targetVal ? "match" : "nomatch";
+function checkMatch(g, t) {
+  return g === t ? "match" : "nomatch";
 }
-
-function checkPos(guessPos, targetPos) {
-  if (guessPos === targetPos) return "match";
-  if (guessPos.includes(targetPos) || targetPos.includes(guessPos))
-    return "partial";
+function checkPos(gp, tp) {
+  if (gp === tp) return "match";
+  if (gp.includes(tp) || tp.includes(gp)) return "partial";
   return "nomatch";
 }
 
-function checkNumberVal(guessVal, targetVal, threshold) {
-  const g = Number(guessVal ?? 0);
-  const t = Number(targetVal ?? 0);
-  if (!Number.isFinite(g) || !Number.isFinite(t)) {
-    return { status: "nomatch", arrow: "" };
-  }
-  const diff = Math.abs(g - t);
-  let status = "nomatch";
-  if (g === t) status = "match";
-  else if (diff <= threshold) status = "partial";
-  let arrow = "";
-  if (g < t) arrow = " ▲";
-  if (g > t) arrow = " ▼";
+function checkNum(g, t, thresh) {
+  const gv = Number(g ?? 0),
+    tv = Number(t ?? 0);
+  if (!isFinite(gv) || !isFinite(tv)) return { status: "nomatch", arrow: "" };
+  const diff = Math.abs(gv - tv);
+  let status = gv === tv ? "match" : diff <= thresh ? "partial" : "nomatch";
+  let arrow = gv < tv ? " ▲" : gv > tv ? " ▼" : "";
   return { status, arrow };
 }
 
@@ -118,8 +107,10 @@ function processGuess(guessName) {
   guessCount++;
   updateGuessCounter();
 
+  let stats, cols;
+
   if (currentMode === "classic") {
-    const stats = {
+    stats = {
       name: guess.name,
       team: {
         val: guess.team,
@@ -133,100 +124,83 @@ function processGuess(guessName) {
       pos: { val: guess.pos, status: checkPos(guess.pos, targetPlayer.pos) },
       height: {
         val: guess.height,
-        ...checkNumberVal(
+        ...checkNum(
           parseHeight(guess.height),
           parseHeight(targetPlayer.height),
           2,
         ),
       },
-      age: {
-        val: guess.age,
-        ...checkNumberVal(guess.age, targetPlayer.age, 2),
-      },
+      age: { val: guess.age, ...checkNum(guess.age, targetPlayer.age, 2) },
       number: {
         val: guess.number,
-        ...checkNumberVal(guess.number, targetPlayer.number, 2),
+        ...checkNum(guess.number, targetPlayer.number, 2),
       },
     };
-    renderRow(stats, [
-      "name",
-      "team",
-      "conf",
-      "div",
-      "pos",
-      "height",
-      "age",
-      "number",
-    ]);
+    cols = ["name", "team", "conf", "div", "pos", "height", "age", "number"];
   } else {
-    const gPts = Number(guess.pts ?? 0);
-    const gReb = Number(guess.reb ?? 0);
-    const gAst = Number(guess.ast ?? 0);
-    const gStl = Number(guess.stl ?? 0);
-    const gBlk = Number(guess.blk ?? 0);
-    const g3m = Number(guess.fg3m ?? 0);
-    const tPts = Number(targetPlayer.pts ?? 0);
-    const tReb = Number(targetPlayer.reb ?? 0);
-    const tAst = Number(targetPlayer.ast ?? 0);
-    const tStl = Number(targetPlayer.stl ?? 0);
-    const tBlk = Number(targetPlayer.blk ?? 0);
-    const t3m = Number(targetPlayer.fg3m ?? 0);
-
-    const stats = {
+    const gPts = Number(guess.pts ?? 0),
+      gReb = Number(guess.reb ?? 0),
+      gAst = Number(guess.ast ?? 0);
+    const gStl = Number(guess.stl ?? 0),
+      gBlk = Number(guess.blk ?? 0),
+      g3m = Number(guess.fg3m ?? 0);
+    const tPts = Number(targetPlayer.pts ?? 0),
+      tReb = Number(targetPlayer.reb ?? 0),
+      tAst = Number(targetPlayer.ast ?? 0);
+    const tStl = Number(targetPlayer.stl ?? 0),
+      tBlk = Number(targetPlayer.blk ?? 0),
+      t3m = Number(targetPlayer.fg3m ?? 0);
+    stats = {
       name: guess.name,
       team: {
         val: guess.team,
         status: checkMatch(guess.team, targetPlayer.team),
       },
       pts: {
-        val: Number.isFinite(gPts) ? gPts.toFixed(1) : "0.0",
-        ...checkNumberVal(gPts, tPts, 1.0),
+        val: isFinite(gPts) ? gPts.toFixed(1) : "0.0",
+        ...checkNum(gPts, tPts, 1.0),
       },
       reb: {
-        val: Number.isFinite(gReb) ? gReb.toFixed(1) : "0.0",
-        ...checkNumberVal(gReb, tReb, 1.0),
+        val: isFinite(gReb) ? gReb.toFixed(1) : "0.0",
+        ...checkNum(gReb, tReb, 1.0),
       },
       ast: {
-        val: Number.isFinite(gAst) ? gAst.toFixed(1) : "0.0",
-        ...checkNumberVal(gAst, tAst, 1.0),
+        val: isFinite(gAst) ? gAst.toFixed(1) : "0.0",
+        ...checkNum(gAst, tAst, 1.0),
       },
       stl: {
-        val: Number.isFinite(gStl) ? gStl.toFixed(1) : "0.0",
-        ...checkNumberVal(gStl, tStl, 0.5),
+        val: isFinite(gStl) ? gStl.toFixed(1) : "0.0",
+        ...checkNum(gStl, tStl, 0.5),
       },
       blk: {
-        val: Number.isFinite(gBlk) ? gBlk.toFixed(1) : "0.0",
-        ...checkNumberVal(gBlk, tBlk, 0.5),
+        val: isFinite(gBlk) ? gBlk.toFixed(1) : "0.0",
+        ...checkNum(gBlk, tBlk, 0.5),
       },
       fg3m: {
-        val: Number.isFinite(g3m) ? g3m.toFixed(1) : "0.0",
-        ...checkNumberVal(g3m, t3m, 0.5),
+        val: isFinite(g3m) ? g3m.toFixed(1) : "0.0",
+        ...checkNum(g3m, t3m, 0.5),
       },
     };
-    renderRow(stats, [
-      "name",
-      "team",
-      "pts",
-      "reb",
-      "ast",
-      "stl",
-      "blk",
-      "fg3m",
-    ]);
+    cols = ["name", "team", "pts", "reb", "ast", "stl", "blk", "fg3m"];
   }
+
+  renderRow(stats, cols);
 }
 
 // ── Render ─────────────────────────────────────────────────
-function renderRow(stats, cells) {
+function renderRow(stats, cols) {
   const container = document.getElementById("guesses-container");
   const row = document.createElement("div");
   row.className = "guess-row";
 
-  cells.forEach((c) => {
+  cols.forEach((c) => {
     const div = document.createElement("div");
-    const baseClass = c === "name" ? "name-cell" : "";
-    const statusClass = c === "name" ? "" : stats[c].status || "";
-    div.className = ("cell " + baseClass + " " + statusClass).trim();
+    div.className = (
+      "cell " +
+      (c === "name" ? "name-cell" : "") +
+      " " +
+      (c !== "name" ? stats[c].status || "" : "")
+    ).trim();
     if (c === "name") {
       div.textContent = stats[c];
     } else {
@@ -241,49 +215,36 @@ function renderRow(stats, cells) {
   container.insertBefore(row, container.firstChild);
 
   const won = stats.name === targetPlayer.name;
-  const outOfGuesses = guessCount >= MAX_GUESSES;
-
-  if (won) {
+  if (won || guessCount >= MAX_GUESSES) {
     gameOver = true;
     document.getElementById("player-input").disabled = true;
-    setTimeout(() => showWinModal(false), 500);
-  } else if (outOfGuesses) {
-    gameOver = true;
-    document.getElementById("player-input").disabled = true;
-    setTimeout(() => showWinModal(true), 500);
+    setTimeout(() => showWinModal(!won), 500);
   }
 }
 
-// ── Modals ─────────────────────────────────────────────────
+// ── Win modal ──────────────────────────────────────────────
 function showWinModal(gaveUp) {
   document.getElementById("win-name").textContent = targetPlayer.name;
   const titleEl = document.getElementById("win-title");
-  const imgEl = document.getElementById("headshot-img");
-
   titleEl.textContent = gaveUp ? "The Player Was" : "You Got It!";
   titleEl.style.color = gaveUp ? "#c0392b" : "#27ae60";
 
-  if (targetImages && targetImages.headshot) {
+  const imgEl = document.getElementById("headshot-img");
+  if (targetImages?.headshot) {
     imgEl.src = targetImages.headshot;
     imgEl.style.display = "block";
-  } else {
-    imgEl.style.display = "none";
-  }
+  } else imgEl.style.display = "none";
 
   document.getElementById("win-modal").style.display = "flex";
 }
 
+// ── Help modal ─────────────────────────────────────────────
 function setupHelpButton() {
   const helpBtn = document.getElementById("help-button");
   const helpModal = document.getElementById("help-modal");
   const closeBtn = document.getElementById("help-close-btn");
-
-  helpBtn.addEventListener("click", () => {
-    helpModal.style.display = "flex";
-  });
-  closeBtn.addEventListener("click", () => {
-    helpModal.style.display = "none";
-  });
+  helpBtn.addEventListener("click", () => (helpModal.style.display = "flex"));
+  closeBtn.addEventListener("click", () => (helpModal.style.display = "none"));
   helpModal.addEventListener("click", (e) => {
     if (e.target === helpModal) helpModal.style.display = "none";
   });
@@ -298,36 +259,36 @@ function setupAutocomplete() {
     list.innerHTML = "";
     if (!this.value) return;
     const val = this.value.toLowerCase();
-    const matches = players.filter((p) => p.name.toLowerCase().includes(val));
-    matches.forEach((match) => {
-      const div = document.createElement("div");
-      const regex = new RegExp("(" + val + ")", "gi");
-      div.innerHTML = match.name.replace(regex, "<strong>$1</strong>");
-      div.addEventListener("click", function () {
-        input.value = "";
-        list.innerHTML = "";
-        processGuess(match.name);
+    players
+      .filter((p) => p.name.toLowerCase().includes(val))
+      .forEach((match) => {
+        const div = document.createElement("div");
+        div.innerHTML = match.name.replace(
+          new RegExp("(" + val + ")", "gi"),
+          "<strong>$1</strong>",
+        );
+        div.addEventListener("click", () => {
+          input.value = "";
+          list.innerHTML = "";
+          processGuess(match.name);
+        });
+        list.appendChild(div);
       });
-      list.appendChild(div);
-    });
   });
 
-  document.addEventListener("click", function (e) {
+  document.addEventListener("click", (e) => {
     if (e.target !== input) list.innerHTML = "";
   });
 
   input.addEventListener("keydown", function (e) {
     if (e.key === "Enter") {
-      const guessName = this.value.trim();
-      if (guessName) {
-        const exactMatch = players.find(
-          (p) => p.name.toLowerCase() === guessName.toLowerCase(),
-        );
-        if (exactMatch) {
-          processGuess(exactMatch.name);
-          this.value = "";
-          list.innerHTML = "";
-        }
+      const match = players.find(
+        (p) => p.name.toLowerCase() === this.value.trim().toLowerCase(),
+      );
+      if (match) {
+        processGuess(match.name);
+        this.value = "";
+        list.innerHTML = "";
       }
     }
   });
@@ -342,11 +303,11 @@ function setupHintButton() {
 
   btn.addEventListener("click", async () => {
     if (!targetPlayer) return;
-
     if (currentMode === "stats") {
       try {
-        const resp = await fetch("/api/team_logo/" + targetPlayer.team);
-        const data = await resp.json();
+        const data = await (
+          await fetch("/api/team_logo/" + targetPlayer.team)
+        ).json();
         if (data.logo) {
           teamLogoImg.src = data.logo;
           teamLogoImg.style.display = "block";
@@ -354,80 +315,83 @@ function setupHintButton() {
           silhouetteImg.style.display = "none";
         }
       } catch (e) {
-        console.warn("Team logo fetch failed", e);
+        console.warn("Logo fetch failed", e);
       }
-      btn.disabled = true;
-      btn.textContent = "Hint Shown";
-      return;
+    } else {
+      if (!targetImages) await loadTargetImages();
+      if (targetImages?.headshot) {
+        await generateSilhouette(targetImages.headshot);
+        silhouetteImg.style.display = "block";
+        teamLogoImg.style.display = "none";
+        placeholder.style.display = "none";
+      }
     }
-
-    if (!targetImages) await loadTargetImages();
-    if (targetImages && targetImages.headshot) {
-      await generateSilhouetteFromHeadshot(targetImages.headshot);
-      silhouetteImg.style.display = "block";
-      teamLogoImg.style.display = "none";
-      placeholder.style.display = "none";
-      btn.disabled = true;
-      btn.textContent = "Hint Shown";
-    }
+    btn.disabled = true;
+    btn.textContent = "Hint Shown";
   });
 }
 
-async function generateSilhouetteFromHeadshot(headshotUrl) {
-  const imgEl = new Image();
-  imgEl.crossOrigin = "anonymous";
-  imgEl.src = headshotUrl;
-  const silhouetteImg = document.getElementById("silhouette-img");
+async function generateSilhouette(url) {
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  img.src = url;
+  const sil = document.getElementById("silhouette-img");
   const canvas = document.getElementById("silhouette-canvas");
   const ctx = canvas.getContext("2d");
-  return new Promise((resolve) => {
-    imgEl.onload = () => {
-      const w = 200,
-        h = 190;
-      canvas.width = w;
-      canvas.height = h;
-      ctx.drawImage(imgEl, 0, 0, w, h);
-      const imageData = ctx.getImageData(0, 0, w, h);
-      const data = imageData.data;
-      for (let i = 0; i < data.length; i += 4) {
-        if (data[i + 3] > 0) {
-          data[i] = 0;
-          data[i + 1] = 0;
-          data[i + 2] = 0;
-          data[i + 3] = 255;
+  return new Promise((res) => {
+    img.onload = () => {
+      canvas.width = 200;
+      canvas.height = 190;
+      ctx.drawImage(img, 0, 0, 200, 190);
+      const d = ctx.getImageData(0, 0, 200, 190),
+        px = d.data;
+      for (let i = 0; i < px.length; i += 4)
+        if (px[i + 3] > 0) {
+          px[i] = px[i + 1] = px[i + 2] = 0;
+          px[i + 3] = 255;
         }
-      }
-      ctx.putImageData(imageData, 0, 0);
-      silhouetteImg.src = canvas.toDataURL("image/png");
-      resolve();
+      ctx.putImageData(d, 0, 0);
+      sil.src = canvas.toDataURL("image/png");
+      res();
     };
-    imgEl.onerror = () => {
-      silhouetteImg.src = headshotUrl;
-      resolve();
+    img.onerror = () => {
+      sil.src = url;
+      res();
     };
   });
 }
 
 // ── Reset helpers ──────────────────────────────────────────
 function resetHintVisuals() {
-  const silhouetteImgEl = document.getElementById("silhouette-img");
-  const teamLogoImgEl = document.getElementById("team-logo-img");
-  const placeholderEl = document.getElementById("silhouette-placeholder");
-  const hintBtn = document.getElementById("hint-button");
+  const sil = document.getElementById("silhouette-img");
+  const logo = document.getElementById("team-logo-img");
+  const ph = document.getElementById("silhouette-placeholder");
+  const btn = document.getElementById("hint-button");
+  if (sil) {
+    sil.style.display = "none";
+    sil.src = "";
+  }
+  if (logo) {
+    logo.style.display = "none";
+    logo.src = "";
+  }
+  if (ph) ph.style.display = "flex";
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = "Show Hint";
+  }
+}
 
-  if (silhouetteImgEl) {
-    silhouetteImgEl.style.display = "none";
-    silhouetteImgEl.src = "";
-  }
-  if (teamLogoImgEl) {
-    teamLogoImgEl.style.display = "none";
-    teamLogoImgEl.src = "";
-  }
-  if (placeholderEl) placeholderEl.style.display = "flex";
-  if (hintBtn) {
-    hintBtn.disabled = false;
-    hintBtn.textContent = "Show Hint";
-  }
+// ── OSK helpers ────────────────────────────────────────────
+function showOsk() {
+  if (!IS_TOUCH) return;
+  document.getElementById("onscreen-keyboard").classList.add("osk--visible");
+  document.body.classList.add("osk-open");
+}
+
+function hideOsk() {
+  document.getElementById("onscreen-keyboard").classList.remove("osk--visible");
+  document.body.classList.remove("osk-open");
 }
 
 // ── Mode selection ─────────────────────────────────────────
@@ -438,8 +402,7 @@ function setupModeSelection() {
   const classicHeader = document.getElementById("classic-header");
   const statsHeader = document.getElementById("stats-header");
 
-  document.querySelectorAll(".mode-btn").forEach((btn) => {
-    if (!btn.dataset.mode) return;
+  document.querySelectorAll(".mode-btn[data-mode]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       currentMode = btn.dataset.mode;
       title.textContent =
@@ -449,34 +412,28 @@ function setupModeSelection() {
 
       resetHintVisuals();
       resetGuessCounter();
-
       startScreen.style.display = "none";
       gameScreen.style.display = "block";
       document.getElementById("guesses-container").innerHTML = "";
 
-      if (players.length > 0) {
+      if (players.length > 0)
         targetPlayer = players[Math.floor(Math.random() * players.length)];
-      }
       targetImages = null;
       await loadTargetImages();
-      document.getElementById("player-input").focus();
+      showOsk();
     });
   });
 }
 
 // ── Back button ────────────────────────────────────────────
 function setupBackButton() {
-  const backBtn = document.getElementById("back-button");
-  const startScreen = document.getElementById("start-screen");
-  const gameScreen = document.getElementById("game-screen");
-  const guesses = document.getElementById("guesses-container");
-
-  backBtn.addEventListener("click", () => {
-    guesses.innerHTML = "";
+  document.getElementById("back-button").addEventListener("click", () => {
+    document.getElementById("guesses-container").innerHTML = "";
     resetHintVisuals();
     resetGuessCounter();
-    gameScreen.style.display = "none";
-    startScreen.style.display = "block";
+    hideOsk();
+    document.getElementById("game-screen").style.display = "none";
+    document.getElementById("start-screen").style.display = "block";
     if (players.length > 0) {
       targetPlayer = players[Math.floor(Math.random() * players.length)];
       targetImages = null;
@@ -486,109 +443,101 @@ function setupBackButton() {
 
 // ── Play again ─────────────────────────────────────────────
 function setupPlayAgain() {
-  const btn = document.getElementById("play-again-btn");
-  const modal = document.getElementById("win-modal");
-  const guesses = document.getElementById("guesses-container");
-
-  btn.addEventListener("click", async () => {
-    modal.style.display = "none";
-    guesses.innerHTML = "";
-    resetHintVisuals();
-    resetGuessCounter();
-    if (players.length > 0) {
-      targetPlayer = players[Math.floor(Math.random() * players.length)];
-    }
-    targetImages = null;
-    await loadTargetImages();
-    document.getElementById("player-input").focus();
-  });
+  document
+    .getElementById("play-again-btn")
+    .addEventListener("click", async () => {
+      document.getElementById("win-modal").style.display = "none";
+      document.getElementById("guesses-container").innerHTML = "";
+      resetHintVisuals();
+      resetGuessCounter();
+      if (players.length > 0)
+        targetPlayer = players[Math.floor(Math.random() * players.length)];
+      targetImages = null;
+      await loadTargetImages();
+      showOsk();
+    });
 }
 
 // ── Give up ────────────────────────────────────────────────
 function setupGiveUp() {
-  const btn = document.getElementById("give-up-button");
-
-  btn.addEventListener("click", () => {
+  document.getElementById("give-up-button").addEventListener("click", () => {
     if (!targetPlayer) return;
     gameOver = true;
     showWinModal(true);
   });
 }
 
-// ── Starters toggle ────────────────────────────────────────
+// ── Starter toggle ─────────────────────────────────────────
 function setupStarterToggle() {
-  const toggle = document.getElementById("starter-toggle");
-  toggle.addEventListener("change", async () => {
-    startersOnly = toggle.checked;
-    document.getElementById("guesses-container").innerHTML = "";
-    resetHintVisuals();
-    resetGuessCounter();
-    await fetchPlayers();
-  });
+  document
+    .getElementById("starter-toggle")
+    .addEventListener("change", async (e) => {
+      startersOnly = e.target.checked;
+      document.getElementById("guesses-container").innerHTML = "";
+      resetHintVisuals();
+      resetGuessCounter();
+      await fetchPlayers();
+      if (IS_TOUCH) showOsk();
+    });
 }
 
 // ── On-screen keyboard ─────────────────────────────────────
 function setupOnscreenKeyboard() {
-  // Only activate on touch devices
-  const isTouchDevice = window.matchMedia("(hover: none)").matches;
-  if (!isTouchDevice) return;
+  if (!IS_TOUCH) return;
 
   const keyboard = document.getElementById("onscreen-keyboard");
   const input = document.getElementById("player-input");
   const backspace = document.getElementById("osk-backspace");
   const enterBtn = document.getElementById("osk-enter");
 
-  if (!keyboard || !input) return;
-
-  // Prevent native keyboard from appearing — use readonly
+  // Prevent native keyboard
   input.setAttribute("readonly", "readonly");
   input.setAttribute("inputmode", "none");
 
-  // Show keyboard when input is focused (tapped)
-  input.addEventListener("focus", () => {
-    keyboard.classList.add("osk--visible");
-    document.body.classList.add("osk-open");
-  });
+  // Show keyboard when input tapped
+  input.addEventListener(
+    "touchstart",
+    (e) => {
+      e.preventDefault();
+      showOsk();
+    },
+    { passive: false },
+  );
 
-  // Key press handler
-  function pressKey(char) {
-    if (gameOver) return;
-    // Flash visual feedback
-    const key = keyboard.querySelector(`[data-char="${CSS.escape(char)}"]`);
-    if (key) {
-      key.classList.add("osk-key--pressed");
-      setTimeout(() => key.classList.remove("osk-key--pressed"), 120);
-    }
-
-    // Insert character
-    input.value += char;
-
-    // Trigger the input event so autocomplete updates
-    input.dispatchEvent(new Event("input", { bubbles: true }));
+  function flash(el) {
+    if (!el) return;
+    el.classList.add("osk-key--pressed");
+    setTimeout(() => el.classList.remove("osk-key--pressed"), 100);
   }
 
-  // Wire up all letter/char keys
+  function pressKey(char) {
+    if (gameOver) return;
+    input.value += char;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    flash(keyboard.querySelector(`[data-char="${char}"]`));
+  }
+
+  // All letter/char keys
   keyboard.querySelectorAll(".osk-key[data-char]").forEach((key) => {
     key.addEventListener(
       "touchstart",
       (e) => {
-        e.preventDefault(); // prevent double-fire
+        e.preventDefault();
         pressKey(key.dataset.char);
       },
       { passive: false },
     );
-
-    // Fallback for non-touch click (dev testing)
-    key.addEventListener("click", () => pressKey(key.dataset.char));
   });
 
-  // Backspace
+  // Backspace with hold-to-repeat
+  let bsTimer = null,
+    bsInterval = null;
+
   function doBackspace() {
     if (gameOver) return;
-    backspace.classList.add("osk-key--pressed");
-    setTimeout(() => backspace.classList.remove("osk-key--pressed"), 120);
     input.value = input.value.slice(0, -1);
     input.dispatchEvent(new Event("input", { bubbles: true }));
+    flash(backspace);
   }
 
   backspace.addEventListener(
@@ -596,78 +545,49 @@ function setupOnscreenKeyboard() {
     (e) => {
       e.preventDefault();
       doBackspace();
+      bsTimer = setTimeout(() => {
+        bsInterval = setInterval(doBackspace, 80);
+      }, 400);
     },
     { passive: false },
   );
-  backspace.addEventListener("click", doBackspace);
 
-  // Hold backspace to delete continuously
-  let backspaceInterval = null;
-  backspace.addEventListener(
-    "touchstart",
-    () => {
-      backspaceInterval = setTimeout(() => {
-        backspaceInterval = setInterval(doBackspace, 80);
-      }, 400);
-    },
-    { passive: true },
-  );
-
-  const stopBackspace = () => {
-    clearTimeout(backspaceInterval);
-    clearInterval(backspaceInterval);
-    backspaceInterval = null;
+  const stopBs = () => {
+    clearTimeout(bsTimer);
+    clearInterval(bsInterval);
   };
+  backspace.addEventListener("touchend", stopBs);
+  backspace.addEventListener("touchcancel", stopBs);
 
-  backspace.addEventListener("touchend", stopBackspace);
-  backspace.addEventListener("touchcancel", stopBackspace);
-
-  // Enter key — find exact match and submit
-  function doEnter() {
-    if (gameOver) return;
-    enterBtn.classList.add("osk-key--pressed");
-    setTimeout(() => enterBtn.classList.remove("osk-key--pressed"), 120);
-
-    const val = input.value.trim();
-    if (!val) return;
-
-    const exactMatch = players.find(
-      (p) => p.name.toLowerCase() === val.toLowerCase(),
-    );
-
-    if (exactMatch) {
-      processGuess(exactMatch.name);
-      input.value = "";
-      document.getElementById("autocomplete-list").innerHTML = "";
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    }
-  }
-
+  // Enter
   enterBtn.addEventListener(
     "touchstart",
     (e) => {
       e.preventDefault();
-      doEnter();
+      flash(enterBtn);
+      if (gameOver) return;
+      const val = input.value.trim();
+      const match = players.find(
+        (p) => p.name.toLowerCase() === val.toLowerCase(),
+      );
+      if (match) {
+        processGuess(match.name);
+        input.value = "";
+        document.getElementById("autocomplete-list").innerHTML = "";
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      }
     },
     { passive: false },
   );
-  enterBtn.addEventListener("click", doEnter);
 
-  // Tapping an autocomplete suggestion should also hide keyboard after
-  document.getElementById("autocomplete-list").addEventListener("click", () => {
-    input.value = "";
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-
-  // Hide keyboard when tapping outside input or keyboard
-  document.addEventListener(
+  // Tapping autocomplete option — clear input after
+  document.getElementById("autocomplete-list").addEventListener(
     "touchstart",
-    (e) => {
-      if (!keyboard.contains(e.target) && e.target !== input) {
-        keyboard.classList.remove("osk--visible");
-        document.body.classList.remove("osk-open");
-        input.blur();
-      }
+    () => {
+      setTimeout(() => {
+        input.value = "";
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      }, 80);
     },
     { passive: true },
   );

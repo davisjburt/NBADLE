@@ -45,28 +45,41 @@ body {
 .screen-back-bar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  text-align: left;
-  margin-bottom: 4px;
+  position: relative;
+  min-height: 38px;
+  margin-bottom: 8px;
 }
 
 .back-link-btn {
-  background: none;
-  border: none;
-  color: #555;
-  font-size: 14px;
+  background: #fff;
+  border: 2px solid #333;
+  box-shadow: 2px 2px 0 #333;
+  border-radius: 4px;
+  color: #333;
+  font-size: 12px;
   font-weight: bold;
   cursor: pointer;
-  padding: 6px 2px;
+  padding: 6px 10px;
   line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+  z-index: 1;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+  transition: transform 0.1s, box-shadow 0.1s;
 }
 .back-link-btn:active {
-  color: #ff4500;
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 #333;
+  background: #f5f5f5;
 }
 
 .screen-logo {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   font-family: "Impact", "Arial Black", sans-serif;
   font-size: clamp(1.4rem, 6vw, 2.2rem);
   color: #ff4500;
@@ -74,10 +87,11 @@ body {
   letter-spacing: 0.05em;
   text-transform: uppercase;
   line-height: 1;
+  pointer-events: none;
 }
 
 .sub-screen-subtitle {
-  margin-top: 14px;
+  margin-top: 10px;
   margin-bottom: 20px;
 }
 
@@ -232,7 +246,8 @@ body {
   margin-bottom: 18px;
   padding: 8px 14px;
   background: #fff;
-  border: 2px solid #ccc;
+  border: 2px solid #333;
+  box-shadow: 2px 2px 0 #333;
   border-radius: 20px;
 }
 
@@ -393,7 +408,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 10px;
 }
 
 #game-title {
@@ -411,7 +426,7 @@ body {
 .starter-filter {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 7px;
 }
 
 .filter-label {
@@ -442,19 +457,21 @@ body {
   cursor: pointer;
   inset: 0;
   background: #ccc;
+  border: 2px solid #333;
+  box-shadow: 2px 2px 0 #333;
+  border-radius: 4px;
   transition: 0.3s;
-  border-radius: 20px;
 }
 .slider:before {
   position: absolute;
   content: "";
-  height: 14px;
-  width: 14px;
-  left: 3px;
-  bottom: 3px;
+  height: 12px;
+  width: 12px;
+  left: 2px;
+  bottom: 2px;
   background: #fff;
   transition: 0.3s;
-  border-radius: 50%;
+  border-radius: 2px;
 }
 input:checked + .slider {
   background: #ff4500;
@@ -569,7 +586,8 @@ input:checked + .slider:before {
   margin-top: 14px;
   transition:
     transform 0.1s,
-    box-shadow 0.1s;
+    box-shadow 0.1s,
+    background 0.1s;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
@@ -652,11 +670,24 @@ input:checked + .slider:before {
   overflow-y: auto;
   box-shadow: 2px 2px 0 #333;
 }
+
+@keyframes acSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .autocomplete-items div {
   padding: 11px 13px;
   cursor: pointer;
   border-bottom: 1px solid #eee;
   font-size: 14px;
+  animation: acSlideIn 0.13s ease-out;
 }
 .autocomplete-items div:active {
   background: #f5f5f5;
@@ -1113,6 +1144,42 @@ body.osk-open {
 }
 
 /* ============================================================
+   BUTTON HOVER EFFECTS (pointer devices only)
+   :not(:active) prevents hover and press from fighting each other
+   ============================================================ */
+@media (hover: hover) {
+  .mode-btn:not(:active):hover {
+    transform: scale(1.03);
+    box-shadow: 4px 4px 0 #333;
+  }
+  .btn-primary:not(:active):hover {
+    transform: scale(1.03);
+    box-shadow: 3px 3px 0 #111;
+    background: #444;
+  }
+  .btn-secondary:not(:active):hover {
+    transform: scale(1.03);
+    box-shadow: 3px 3px 0 #333;
+  }
+  .icon-btn:not(:active):hover {
+    transform: scale(1.08);
+    box-shadow: 3px 3px 0 #333;
+  }
+  .give-up-btn:not(:active):hover {
+    transform: scale(1.04);
+    box-shadow: 3px 3px 0 #333;
+  }
+  #hint-button:not(:disabled):not(:active):hover {
+    transform: scale(1.03);
+    box-shadow: 3px 3px 0 #333;
+  }
+  .back-link-btn:not(:active):hover {
+    transform: scale(1.04);
+    box-shadow: 3px 3px 0 #333;
+  }
+}
+
+/* ============================================================
    TABLET  ≥ 480px
    ============================================================ */
 @media (min-width: 480px) {
@@ -1133,8 +1200,8 @@ body.osk-open {
     height: 22px;
   }
   .slider:before {
-    height: 16px;
-    width: 16px;
+    height: 14px;
+    width: 14px;
   }
   input:checked + .slider:before {
     transform: translateX(18px);
@@ -1256,8 +1323,8 @@ body.osk-open {
     height: 24px;
   }
   .slider:before {
-    height: 18px;
-    width: 18px;
+    height: 16px;
+    width: 16px;
   }
   input:checked + .slider:before {
     transform: translateX(20px);

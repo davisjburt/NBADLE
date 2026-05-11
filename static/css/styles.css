@@ -26,13 +26,240 @@ body {
 }
 
 /* ============================================================
-   START SCREEN
+   LANDING + SUB-SCREENS (shared base)
    ============================================================ */
-#start-screen {
+#landing-screen,
+#start-screen,
+#versus-lobby-screen,
+#versus-create-screen,
+#versus-join-screen {
   text-align: center;
+  padding: 20px 10px;
+}
+
+#landing-screen {
   padding: 28px 10px 20px;
 }
 
+/* Back-bar at top of sub-screens */
+.screen-back-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  margin-bottom: 4px;
+}
+
+.back-link-btn {
+  background: none;
+  border: none;
+  color: #555;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  padding: 6px 2px;
+  line-height: 1;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.back-link-btn:active {
+  color: #ff4500;
+}
+
+.screen-logo {
+  font-family: "Impact", "Arial Black", sans-serif;
+  font-size: clamp(1.4rem, 6vw, 2.2rem);
+  color: #ff4500;
+  -webkit-text-stroke: clamp(0.5px, 0.2vw, 1.5px) #7f1500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.sub-screen-subtitle {
+  margin-top: 14px;
+  margin-bottom: 20px;
+}
+
+/* ── PIN display (host waiting screen) ── */
+.vs-waiting-container {
+  text-align: center;
+  padding: 10px 0;
+}
+
+.vs-share-text {
+  font-size: 14px;
+  color: #444;
+  margin: 16px 0 0;
+}
+
+.pin-display {
+  font-family: "Courier New", "Courier", monospace;
+  font-size: clamp(28px, 12vw, 52px);
+  font-weight: bold;
+  letter-spacing: 0.22em;
+  color: #111;
+  background: #fff;
+  border: 3px solid #333;
+  box-shadow: 4px 4px 0 #333;
+  border-radius: 8px;
+  padding: 14px 24px;
+  display: inline-block;
+  margin: 14px 0 6px;
+}
+
+.vs-waiting-status {
+  color: #888;
+  font-size: 13px;
+  font-style: italic;
+  margin: 8px 0 14px;
+}
+
+.btn-secondary {
+  background: #fff;
+  border: 2px solid #333;
+  box-shadow: 2px 2px 0 #333;
+  border-radius: 4px;
+  color: #333;
+  font-size: 13px;
+  font-weight: bold;
+  padding: 8px 20px;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.btn-secondary:active {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 #333;
+}
+
+/* ── JOIN screen PIN input ── */
+.vs-join-container {
+  text-align: center;
+}
+
+.pin-input-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+#pin-input {
+  width: min(220px, 85vw);
+  padding: 14px 16px;
+  font-size: clamp(20px, 6vw, 28px);
+  font-family: "Courier New", "Courier", monospace;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  border: 3px solid #333;
+  border-radius: 6px;
+  outline: none;
+  background: #fff;
+  -webkit-appearance: none;
+}
+#pin-input:focus {
+  border-color: #ff4500;
+  box-shadow: 0 0 0 3px rgba(255, 69, 0, 0.12);
+}
+
+.join-error {
+  color: #c0392b;
+  font-size: 12px;
+  font-weight: bold;
+  margin: 0;
+}
+
+/* ── VS status bar (in-game) ── */
+#vs-status-bar {
+  background: #222;
+  border-radius: 4px;
+  padding: 7px 12px;
+  margin-bottom: 8px;
+  border: 2px solid #111;
+  box-shadow: 2px 2px 0 #111;
+}
+
+.vs-status-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.vs-vs-label {
+  color: #ff4500;
+  font-size: 13px;
+  font-family: "Impact", "Arial Black", sans-serif;
+  letter-spacing: 0.05em;
+}
+
+.vs-player-stat strong {
+  color: #ff4500;
+  font-size: 13px;
+}
+
+/* PIN chip inside the VS status bar */
+.vs-pin-chip {
+  margin-left: 6px;
+  padding-left: 10px;
+  border-left: 1px solid rgba(255, 255, 255, 0.25);
+  font-size: 10px;
+  color: #aaa;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.vs-pin-chip strong {
+  color: #fff;
+  font-family: "Courier New", "Courier", monospace;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+}
+
+/* Starters-only toggle row on the VS create screen */
+.vs-starters-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 18px;
+  padding: 8px 14px;
+  background: #fff;
+  border: 2px solid #ccc;
+  border-radius: 20px;
+}
+
+.vs-starters-label {
+  font-size: 12px;
+  font-weight: bold;
+  color: #444;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ── Win modal subtitle ── */
+.win-subtitle {
+  font-size: 14px;
+  color: #555;
+  margin: 2px 0 0;
+}
+
+/* ============================================================
+   START SCREEN  (legacy — kept for #start-screen h1 reference)
+   ============================================================ */
+#start-screen {
+  text-align: center;
+  padding: 20px 10px;
+}
+
+#landing-screen h1,
 #start-screen h1 {
   font-family: "Impact", "Arial Black", sans-serif;
   font-size: clamp(3.5rem, 18vw, 11rem);
@@ -850,7 +1077,8 @@ body.osk-open {
   body {
     padding: 22px 16px 44px;
   }
-  #start-screen {
+  #start-screen,
+  #landing-screen {
     padding: 44px 20px 28px;
   }
 
@@ -938,7 +1166,8 @@ body.osk-open {
   body {
     padding: 40px 24px 60px;
   }
-  #start-screen {
+  #start-screen,
+  #landing-screen {
     padding: 64px 24px 48px;
   }
   .start-subtitle {

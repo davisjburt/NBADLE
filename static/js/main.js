@@ -13,10 +13,51 @@ let startersOnly = false;
 let guessCount = 0;
 let gameOver = false;
 
-// Touch detection — most reliable cross-browser method
+// VS state
+let vsMode = false;
+let vsPin = null;
+let vsPlayerId = null;
+let vsRole = null;         // 'host' | 'challenger'
+let vsWinner = null;       // 'host' | 'challenger' | null
+let vsGameStarted = false;
+let vsPollingInterval = null;
+let vsOpponentGuessCount = 0;
+
+// Touch detection
 const IS_TOUCH = navigator.maxTouchPoints > 0 || "ontouchstart" in window;
 
-// ── Guess counter ──────────────────────────────────────────
+// All screen IDs — only one shown at a time
+const SCREENS = [
+  "landing-screen",
+  "start-screen",
+  "versus-lobby-screen",
+  "versus-create-screen",
+  "versus-join-screen",
+  "game-screen",
+];
+
+// ── Screen manager ─────────────────────────────────────────────
+function showScreen(id) {
+  SCREENS.forEach((s) => {
+    const el = document.getElementById(s);
+    if (el) el.style.display = s === id ? "" : "none";
+  });
+}
+
+// ── Player ID (persisted across visits) ───────────────────────
+function getOrCreatePlayerId() {
+  let id = localStorage.getItem("nbadle_player_id");
+  if (!id) {
+    id =
+      "p_" +
+      Math.random().toString(36).slice(2) +
+      Math.random().toString(36).slice(2);
+    localStorage.setItem("nbadle_player_id", id);
+  }
+  return id;
+}
+
+// ── Guess counter ──────────────────────────────────────────────
 function updateGuessCounter() {
   const el = document.getElementById("guess-count");
   if (el) el.textContent = guessCount;
@@ -30,8 +71,8 @@ function resetGuessCounter() {
   if (input) input.disabled = false;
 }
 
-// ── Player fetching ────────────────────────────────────────
-async function fetchPlayers() {
+// ── Player fetching ────────────────────────────────────────────
+async function fetchPlayers(skipTargetSelect = false) {
   const loader = document.getElementById("loading-indicator");
   loader.style.display = "block";
   try {
@@ -41,21 +82,23 @@ async function fetchPlayers() {
     const data = await res.json();
     if (Array.isArray(data) && data.length > 0) {
       players = data;
-      targetPlayer = players[Math.floor(Math.random() * players.length)];
-      targetImages = null;
-      await loadTargetImages();
+      if (!skipTargetSelect) {
+        targetPlayer = players[Math.floor(Math.random() * players.length)];
+        targetImages = null;
+        await loadTargetImages();
+      }
     }
   } catch (err) {
     console.warn("Backend unavailable. Using fallback.", err);
     players = startersOnly
       ? fallbackPlayers.filter((p) => p.is_starter)
       : [...fallbackPlayers];
-    if (players.length > 0)
+    if (!skipTargetSelect && players.length > 0)
       targetPlayer = players[Math.floor(Math.random() * players.length)];
   }
-  if (targetPlayer && !targetImages) await loadTargetImages();
+  if (!skipTargetSelect && targetPlayer && !targetImages) await loadTargetImages();
   loader.style.display = "none";
-  document.getElementById("player-input").focus();
+  if (!skipTargetSelect) document.getElementById("player-input").focus();
 }
 
 async function loadTargetImages() {
@@ -70,7 +113,7 @@ async function loadTargetImages() {
   }
 }
 
-// ── Comparison helpers ─────────────────────────────────────
+// ── Comparison helpers ─────────────────────────────────────────
 function parseHeight(h) {
   if (!h) return 0;
   const p = h.split("'");
@@ -98,7 +141,7 @@ function checkNum(g, t, thresh) {
   return { status, arrow };
 }
 
-// ── Guess processing ───────────────────────────────────────
+// ── Guess processing ───────────────────────────────────────────
 function processGuess(guessName) {
   if (gameOver) return;
   const guess = players.find((p) => p.name === guessName);
@@ -187,7 +230,7 @@ function processGuess(guessName) {
   renderRow(stats, cols);
 }
 
-// ── Render ─────────────────────────────────────────────────
+// ── Render ─────────────────────────────────────────────────────
 function renderRow(stats, cols) {
   const container = document.getElementById("guesses-container");
   const row = document.createElement("div");
@@ -215,30 +258,67 @@ function renderRow(stats, cols) {
   container.insertBefore(row, container.firstChild);
 
   const won = stats.name === targetPlayer.name;
-  if (won || guessCount >= MAX_GUESSES) {
-    gameOver = true;
-    document.getElementById("player-input").disabled = true;
-    setTimeout(() => showWinModal(!won), 500);
+
+  if (vsMode) {
+    // Report every guess to server; check win condition locally
+    reportVsGuess(won);
+    if (won) {
+      vsWinner = vsRole;
+      stopVsPolling();
+      gameOver = true;
+      document.getElementById("player-input").disabled = true;
+      setTimeout(() => showWinModal(false), 500);
+    }
+    // No max-guess limit in VS — game continues until someone wins
+  } else {
+    if (won || guessCount >= MAX_GUESSES) {
+      gameOver = true;
+      document.getElementById("player-input").disabled = true;
+      setTimeout(() => showWinModal(!won), 500);
+    }
   }
 }
 
-// ── Win modal ──────────────────────────────────────────────
+// ── Win / result modal ─────────────────────────────────────────
 function showWinModal(gaveUp) {
-  document.getElementById("win-name").textContent = targetPlayer.name;
   const titleEl = document.getElementById("win-title");
-  titleEl.textContent = gaveUp ? "The Player Was" : "You Got It!";
-  titleEl.style.color = gaveUp ? "#c0392b" : "#27ae60";
+  const subtitleEl = document.getElementById("win-subtitle");
+  const playAgainBtn = document.getElementById("play-again-btn");
+
+  if (vsMode) {
+    const weWon = vsWinner === vsRole;
+    titleEl.textContent = weWon ? "You Won!" : "Opponent Got It!";
+    titleEl.style.color = weWon ? "#27ae60" : "#c0392b";
+    if (subtitleEl) {
+      subtitleEl.textContent = weWon
+        ? `You guessed it in ${guessCount} ${guessCount === 1 ? "guess" : "guesses"}!`
+        : "Better luck next time.";
+      subtitleEl.style.display = "";
+    }
+    playAgainBtn.textContent = "Back to Lobby";
+  } else {
+    titleEl.textContent = gaveUp ? "The Player Was" : "You Got It!";
+    titleEl.style.color = gaveUp ? "#c0392b" : "#27ae60";
+    if (subtitleEl) subtitleEl.style.display = "none";
+    playAgainBtn.textContent = "New Game";
+  }
+
+  document.getElementById("win-name").textContent = targetPlayer
+    ? targetPlayer.name
+    : "";
 
   const imgEl = document.getElementById("headshot-img");
   if (targetImages?.headshot) {
     imgEl.src = targetImages.headshot;
     imgEl.style.display = "block";
-  } else imgEl.style.display = "none";
+  } else {
+    imgEl.style.display = "none";
+  }
 
   document.getElementById("win-modal").style.display = "flex";
 }
 
-// ── Help modal ─────────────────────────────────────────────
+// ── Help modal ─────────────────────────────────────────────────
 function setupHelpButton() {
   const helpBtn = document.getElementById("help-button");
   const helpModal = document.getElementById("help-modal");
@@ -250,7 +330,7 @@ function setupHelpButton() {
   });
 }
 
-// ── Autocomplete ───────────────────────────────────────────
+// ── Autocomplete ───────────────────────────────────────────────
 function setupAutocomplete() {
   const input = document.getElementById("player-input");
   const list = document.getElementById("autocomplete-list");
@@ -294,7 +374,7 @@ function setupAutocomplete() {
   });
 }
 
-// ── Hint button ────────────────────────────────────────────
+// ── Hint button ────────────────────────────────────────────────
 function setupHintButton() {
   const btn = document.getElementById("hint-button");
   const placeholder = document.getElementById("silhouette-placeholder");
@@ -361,28 +441,38 @@ async function generateSilhouette(url) {
   });
 }
 
-// ── Reset helpers ──────────────────────────────────────────
+// ── Reset helpers ──────────────────────────────────────────────
 function resetHintVisuals() {
   const sil = document.getElementById("silhouette-img");
   const logo = document.getElementById("team-logo-img");
   const ph = document.getElementById("silhouette-placeholder");
   const btn = document.getElementById("hint-button");
-  if (sil) {
-    sil.style.display = "none";
-    sil.src = "";
-  }
-  if (logo) {
-    logo.style.display = "none";
-    logo.src = "";
-  }
+  if (sil) { sil.style.display = "none"; sil.src = ""; }
+  if (logo) { logo.style.display = "none"; logo.src = ""; }
   if (ph) ph.style.display = "flex";
-  if (btn) {
-    btn.disabled = false;
-    btn.textContent = "Show Hint";
-  }
+  if (btn) { btn.disabled = false; btn.textContent = "Show Hint"; }
 }
 
-// ── OSK helpers ────────────────────────────────────────────
+// ── VS UI helpers ──────────────────────────────────────────────
+function enterVsGameUi() {
+  document.getElementById("vs-status-bar").style.display = "";
+  document.getElementById("give-up-button").style.display = "none";
+  document.getElementById("guess-max-part").style.display = "none";
+  document.querySelector(".starter-filter").style.display = "none";
+  // Counts and PIN are read from the live state variables at call time
+  document.getElementById("vs-your-guesses").textContent = guessCount;
+  document.getElementById("vs-opponent-guesses").textContent = vsOpponentGuessCount;
+  document.getElementById("vs-game-pin").textContent = vsPin || "------";
+}
+
+function exitVsGameUi() {
+  document.getElementById("vs-status-bar").style.display = "none";
+  document.getElementById("give-up-button").style.display = "";
+  document.getElementById("guess-max-part").style.display = "";
+  document.querySelector(".starter-filter").style.display = "";
+}
+
+// ── OSK helpers ────────────────────────────────────────────────
 function showOsk() {
   if (!IS_TOUCH) return;
   document.getElementById("onscreen-keyboard").classList.add("osk--visible");
@@ -394,80 +484,435 @@ function hideOsk() {
   document.body.classList.remove("osk-open");
 }
 
-// ── Mode selection ─────────────────────────────────────────
-function setupModeSelection() {
-  const startScreen = document.getElementById("start-screen");
-  const gameScreen = document.getElementById("game-screen");
-  const title = document.getElementById("game-title");
-  const classicHeader = document.getElementById("classic-header");
-  const statsHeader = document.getElementById("stats-header");
+// ── Landing screen ─────────────────────────────────────────────
+function setupLanding() {
+  document.getElementById("solo-btn").addEventListener("click", () => {
+    showScreen("start-screen");
+  });
+  document.getElementById("versus-btn").addEventListener("click", () => {
+    showScreen("versus-lobby-screen");
+  });
+}
 
-  document.querySelectorAll(".mode-btn[data-mode]").forEach((btn) => {
+// ── Solo mode select ───────────────────────────────────────────
+function setupSoloModeSelect() {
+  document.getElementById("solo-back-btn").addEventListener("click", () => {
+    showScreen("landing-screen");
+  });
+
+  document.querySelectorAll("#start-screen .mode-btn[data-mode]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       currentMode = btn.dataset.mode;
-      title.textContent =
-        currentMode === "classic" ? "NBADLE – Classic" : "NBADLE – Stats";
-      classicHeader.style.display = currentMode === "classic" ? "flex" : "none";
-      statsHeader.style.display = currentMode === "stats" ? "flex" : "none";
-
-      resetHintVisuals();
-      resetGuessCounter();
-      startScreen.style.display = "none";
-      gameScreen.style.display = "block";
-      document.getElementById("guesses-container").innerHTML = "";
-
-      if (players.length > 0)
-        targetPlayer = players[Math.floor(Math.random() * players.length)];
-      targetImages = null;
-      await loadTargetImages();
-      showOsk();
+      await startSoloGame();
     });
   });
 }
 
-// ── Back button ────────────────────────────────────────────
+async function startSoloGame() {
+  vsMode = false;
+  exitVsGameUi();
+
+  const classicHeader = document.getElementById("classic-header");
+  const statsHeader = document.getElementById("stats-header");
+  document.getElementById("game-title").textContent =
+    currentMode === "classic" ? "NBADLE – Classic" : "NBADLE – Stats";
+  classicHeader.style.display = currentMode === "classic" ? "flex" : "none";
+  statsHeader.style.display = currentMode === "stats" ? "flex" : "none";
+
+  resetHintVisuals();
+  resetGuessCounter();
+  document.getElementById("guesses-container").innerHTML = "";
+
+  if (players.length > 0)
+    targetPlayer = players[Math.floor(Math.random() * players.length)];
+  targetImages = null;
+  await loadTargetImages();
+
+  showScreen("game-screen");
+  showOsk();
+}
+
+// ── Versus lobby ───────────────────────────────────────────────
+function setupVersusLobby() {
+  document.getElementById("versus-back-btn").addEventListener("click", () => {
+    showScreen("landing-screen");
+  });
+
+  document.getElementById("create-game-btn").addEventListener("click", () => {
+    document.getElementById("vs-mode-select-step").style.display = "";
+    document.getElementById("vs-waiting-step").style.display = "none";
+    showScreen("versus-create-screen");
+  });
+
+  document.getElementById("join-game-btn").addEventListener("click", () => {
+    document.getElementById("pin-input").value = "";
+    document.getElementById("join-error").style.display = "none";
+    document.getElementById("join-game-submit-btn").disabled = false;
+    document.getElementById("join-game-submit-btn").textContent = "Join Game";
+    showScreen("versus-join-screen");
+  });
+}
+
+// ── Versus create ──────────────────────────────────────────────
+function setupVersusCreate() {
+  document.getElementById("vs-create-back-btn").addEventListener("click", () => {
+    showScreen("versus-lobby-screen");
+  });
+
+  document.getElementById("cancel-vs-btn").addEventListener("click", () => {
+    stopVsPolling();
+    vsPin = null;
+    showScreen("versus-lobby-screen");
+  });
+
+  document.getElementById("copy-pin-btn").addEventListener("click", () => {
+    const pin = document.getElementById("vs-pin-display").textContent;
+    navigator.clipboard.writeText(pin).catch(() => {});
+    const btn = document.getElementById("copy-pin-btn");
+    btn.textContent = "Copied!";
+    setTimeout(() => (btn.textContent = "Copy PIN"), 2000);
+  });
+
+  document.getElementById("vs-starter-toggle").addEventListener("change", (e) => {
+    startersOnly = e.target.checked;
+  });
+
+  document.querySelectorAll(".mode-btn[data-vs-mode]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await createVsGame(btn.dataset.vsMode);
+    });
+  });
+}
+
+async function createVsGame(mode) {
+  currentMode = mode;
+
+  // Switch to waiting step
+  document.getElementById("vs-mode-select-step").style.display = "none";
+  document.getElementById("vs-waiting-step").style.display = "";
+  document.getElementById("vs-pin-display").textContent = "------";
+  document.getElementById("vs-waiting-status").textContent = "Creating game…";
+  document.getElementById("copy-pin-btn").textContent = "Copy PIN";
+
+  try {
+    const res = await fetch("/api/vs/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mode,
+        starters_only: startersOnly,
+        player_id: vsPlayerId,
+      }),
+    });
+    const data = await res.json();
+
+    vsPin = data.pin;
+    vsRole = "host";
+    vsGameStarted = false;
+    targetPlayer = data.target_player;
+    targetImages = null;
+
+    document.getElementById("vs-pin-display").textContent = data.pin;
+    document.getElementById("vs-waiting-status").textContent =
+      "Waiting for opponent…";
+
+    // Poll until challenger joins, then launch game
+    startVsPolling();
+  } catch (err) {
+    console.error("Failed to create VS game", err);
+    document.getElementById("vs-waiting-status").textContent =
+      "Error creating game. Tap Cancel and try again.";
+  }
+}
+
+// ── Versus join ────────────────────────────────────────────────
+function setupVersusJoin() {
+  document.getElementById("vs-join-back-btn").addEventListener("click", () => {
+    showScreen("versus-lobby-screen");
+  });
+
+  document
+    .getElementById("join-game-submit-btn")
+    .addEventListener("click", async () => {
+      await joinVsGame();
+    });
+
+  document
+    .getElementById("pin-input")
+    .addEventListener("keydown", async (e) => {
+      if (e.key === "Enter") await joinVsGame();
+    });
+}
+
+async function joinVsGame() {
+  const pin = document.getElementById("pin-input").value.trim().toUpperCase();
+  const errEl = document.getElementById("join-error");
+  const submitBtn = document.getElementById("join-game-submit-btn");
+
+  if (pin.length < 4) {
+    errEl.textContent = "Please enter a valid PIN.";
+    errEl.style.display = "";
+    return;
+  }
+
+  errEl.style.display = "none";
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Joining…";
+
+  try {
+    const res = await fetch("/api/vs/join", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pin, player_id: vsPlayerId }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      errEl.textContent = data.error || "Could not join. Check the PIN.";
+      errEl.style.display = "";
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Join Game";
+      return;
+    }
+
+    const data = await res.json();
+    vsPin = data.pin;
+    vsRole = data.role;           // 'host' | 'challenger'
+    currentMode = data.mode;
+    targetPlayer = data.target_player;
+    targetImages = null;
+
+    const yourCount = data.your_guess_count || 0;
+    const oppCount  = data.opponent_guess_count || 0;
+
+    // Game already over — show result
+    if (data.winner) {
+      vsWinner = data.winner;
+      vsGameStarted = true;
+      await startVsGame(yourCount, oppCount);
+      setTimeout(() => showWinModal(false), 300);
+      return;
+    }
+
+    // Host reconnecting before challenger arrived — back to waiting screen
+    if (data.role === "host" && !data.started) {
+      vsGameStarted = false;
+      document.getElementById("vs-pin-display").textContent = vsPin;
+      document.getElementById("vs-waiting-status").textContent = "Waiting for opponent…";
+      document.getElementById("copy-pin-btn").textContent = "Copy PIN";
+      document.getElementById("vs-mode-select-step").style.display = "none";
+      document.getElementById("vs-waiting-step").style.display = "";
+      showScreen("versus-create-screen");
+      startVsPolling();
+      return;
+    }
+
+    // Host reconnecting mid-game OR challenger (new or returning)
+    vsGameStarted = true;
+    await startVsGame(yourCount, oppCount);
+    startVsPolling();
+  } catch (err) {
+    errEl.textContent = "Connection error. Try again.";
+    errEl.style.display = "";
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Join Game";
+  }
+}
+
+// ── VS game launch ─────────────────────────────────────────────
+// yourCount / oppCount let reconnecting players restore accurate counts.
+async function startVsGame(yourCount = 0, oppCount = 0) {
+  vsMode = true;
+  guessCount = yourCount;
+  vsOpponentGuessCount = oppCount;
+  gameOver = false;
+
+  const classicHeader = document.getElementById("classic-header");
+  const statsHeader = document.getElementById("stats-header");
+  document.getElementById("game-title").textContent =
+    currentMode === "classic" ? "NBADLE – Classic" : "NBADLE – Stats";
+  classicHeader.style.display = currentMode === "classic" ? "flex" : "none";
+  statsHeader.style.display = currentMode === "stats" ? "flex" : "none";
+
+  enterVsGameUi();   // sets status bar counts + PIN from current state
+  resetHintVisuals();
+  updateGuessCounter();
+  document.getElementById("player-input").disabled = false;
+  document.getElementById("guesses-container").innerHTML = "";
+
+  await loadTargetImages();
+
+  showScreen("game-screen");
+  showOsk();
+}
+
+// ── VS polling ─────────────────────────────────────────────────
+function startVsPolling() {
+  stopVsPolling();
+  vsPollingInterval = setInterval(pollVsStatus, 3000);
+}
+
+function stopVsPolling() {
+  if (vsPollingInterval) {
+    clearInterval(vsPollingInterval);
+    vsPollingInterval = null;
+  }
+}
+
+async function pollVsStatus() {
+  if (!vsPin) return;
+
+  try {
+    const res = await fetch(
+      `/api/vs/status/${vsPin}?player_id=${vsPlayerId}`
+    );
+    if (!res.ok) return;
+    const data = await res.json();
+
+    // Host waiting for challenger to join
+    if (vsRole === "host" && !vsGameStarted) {
+      if (data.started) {
+        vsGameStarted = true;
+        // Pass challenger's current count so host sees accurate opponent tally
+        await startVsGame(0, data.challenger_guess_count || 0);
+        startVsPolling(); // restart polling now that game is live
+      }
+      return;
+    }
+
+    // In-game: sync both counts from server truth
+    vsOpponentGuessCount =
+      vsRole === "host" ? data.challenger_guess_count : data.host_guess_count;
+    const serverYours =
+      vsRole === "host" ? data.host_guess_count : data.challenger_guess_count;
+
+    const oppEl = document.getElementById("vs-opponent-guesses");
+    if (oppEl) oppEl.textContent = vsOpponentGuessCount;
+
+    // Reconcile our count with server (catches reconnection drift)
+    if (serverYours > guessCount) {
+      guessCount = serverYours;
+      updateGuessCounter();
+      const yourEl = document.getElementById("vs-your-guesses");
+      if (yourEl) yourEl.textContent = guessCount;
+    }
+
+    // Detect opponent win (we haven't won yet ourselves)
+    if (data.winner && !vsWinner && !gameOver) {
+      vsWinner = data.winner;
+      const weWon =
+        (vsRole === "host" && data.winner === "host") ||
+        (vsRole === "challenger" && data.winner === "challenger");
+
+      if (!weWon) {
+        stopVsPolling();
+        gameOver = true;
+        if (data.target_player) targetPlayer = data.target_player;
+        if (targetPlayer) {
+          try {
+            const imgRes = await fetch("/api/player_image/" + targetPlayer.id);
+            const imgJson = await imgRes.json();
+            if (imgJson.headshot) targetImages = imgJson;
+          } catch (_) {}
+        }
+        document.getElementById("player-input").disabled = true;
+        setTimeout(() => showWinModal(false), 300);
+      }
+    }
+  } catch (_) {
+    // Ignore network errors during polling
+  }
+}
+
+// ── Report guess to server ─────────────────────────────────────
+async function reportVsGuess(correct) {
+  const yourEl = document.getElementById("vs-your-guesses");
+  if (yourEl) yourEl.textContent = guessCount;
+
+  if (!vsPin || !vsPlayerId) return;
+  try {
+    await fetch("/api/vs/guess", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        pin: vsPin,
+        player_id: vsPlayerId,
+        correct,
+      }),
+    });
+  } catch (err) {
+    console.warn("Failed to report VS guess", err);
+  }
+}
+
+// ── VS state reset ─────────────────────────────────────────────
+function resetVsState() {
+  stopVsPolling();
+  vsMode = false;
+  vsPin = null;
+  vsRole = null;
+  vsWinner = null;
+  vsGameStarted = false;
+  vsOpponentGuessCount = 0;
+}
+
+// ── Back button ────────────────────────────────────────────────
 function setupBackButton() {
   document.getElementById("back-button").addEventListener("click", () => {
     document.getElementById("guesses-container").innerHTML = "";
+    document.getElementById("win-modal").style.display = "none";
     resetHintVisuals();
     resetGuessCounter();
     hideOsk();
-    document.getElementById("game-screen").style.display = "none";
-    document.getElementById("start-screen").style.display = "block";
-    if (players.length > 0) {
-      targetPlayer = players[Math.floor(Math.random() * players.length)];
-      targetImages = null;
+
+    if (vsMode) {
+      resetVsState();
+      exitVsGameUi();
+      showScreen("landing-screen");
+    } else {
+      exitVsGameUi();
+      showScreen("start-screen");
+      if (players.length > 0) {
+        targetPlayer = players[Math.floor(Math.random() * players.length)];
+        targetImages = null;
+      }
     }
   });
 }
 
-// ── Play again ─────────────────────────────────────────────
+// ── Play again ─────────────────────────────────────────────────
 function setupPlayAgain() {
-  document
-    .getElementById("play-again-btn")
-    .addEventListener("click", async () => {
-      document.getElementById("win-modal").style.display = "none";
-      document.getElementById("guesses-container").innerHTML = "";
-      resetHintVisuals();
-      resetGuessCounter();
-      if (players.length > 0)
-        targetPlayer = players[Math.floor(Math.random() * players.length)];
-      targetImages = null;
-      await loadTargetImages();
-      showOsk();
-    });
+  document.getElementById("play-again-btn").addEventListener("click", async () => {
+    document.getElementById("win-modal").style.display = "none";
+
+    if (vsMode) {
+      resetVsState();
+      exitVsGameUi();
+      showScreen("landing-screen");
+      return;
+    }
+
+    document.getElementById("guesses-container").innerHTML = "";
+    resetHintVisuals();
+    resetGuessCounter();
+    if (players.length > 0)
+      targetPlayer = players[Math.floor(Math.random() * players.length)];
+    targetImages = null;
+    await loadTargetImages();
+    showOsk();
+  });
 }
 
-// ── Give up ────────────────────────────────────────────────
+// ── Give up ────────────────────────────────────────────────────
 function setupGiveUp() {
   document.getElementById("give-up-button").addEventListener("click", () => {
-    if (!targetPlayer) return;
+    if (!targetPlayer || vsMode) return;
     gameOver = true;
     showWinModal(true);
   });
 }
 
-// ── Starter toggle ─────────────────────────────────────────
+// ── Starter toggle ─────────────────────────────────────────────
 function setupStarterToggle() {
   document
     .getElementById("starter-toggle")
@@ -481,7 +926,7 @@ function setupStarterToggle() {
     });
 }
 
-// ── On-screen keyboard ─────────────────────────────────────
+// ── On-screen keyboard ─────────────────────────────────────────
 function setupOnscreenKeyboard() {
   if (!IS_TOUCH) return;
 
@@ -490,15 +935,12 @@ function setupOnscreenKeyboard() {
   const backspace = document.getElementById("osk-backspace");
   const enterBtn = document.getElementById("osk-enter");
 
-  // Allow the native blinking caret, but prevent the native keyboard
   input.removeAttribute("readonly");
   input.setAttribute("inputmode", "none");
 
-  // Show keyboard and focus input to display the caret
   input.addEventListener(
     "touchstart",
-    (e) => {
-      // No preventDefault() here so the input can actually receive focus natively
+    () => {
       showOsk();
       setTimeout(() => input.focus({ preventScroll: true }), 50);
     },
@@ -519,7 +961,6 @@ function setupOnscreenKeyboard() {
     input.focus({ preventScroll: true });
   }
 
-  // All letter/char keys
   keyboard.querySelectorAll(".osk-key[data-char]").forEach((key) => {
     key.addEventListener(
       "touchstart",
@@ -531,9 +972,7 @@ function setupOnscreenKeyboard() {
     );
   });
 
-  // Backspace with hold-to-repeat
-  let bsTimer = null,
-    bsInterval = null;
+  let bsTimer = null, bsInterval = null;
 
   function doBackspace() {
     if (gameOver) return;
@@ -562,7 +1001,6 @@ function setupOnscreenKeyboard() {
   backspace.addEventListener("touchend", stopBs);
   backspace.addEventListener("touchcancel", stopBs);
 
-  // Enter Button
   enterBtn.addEventListener(
     "touchstart",
     (e) => {
@@ -571,11 +1009,8 @@ function setupOnscreenKeyboard() {
       if (gameOver) return;
 
       const val = input.value.trim().toLowerCase();
-
-      // Check for an exact typed match first
       let match = players.find((p) => p.name.toLowerCase() === val);
 
-      // If no exact match, grab the first available suggestion in the autocomplete list
       if (!match) {
         const list = document.getElementById("autocomplete-list");
         if (list.firstChild) {
@@ -597,9 +1032,14 @@ function setupOnscreenKeyboard() {
   );
 }
 
-// ── Init ───────────────────────────────────────────────────
+// ── Init ───────────────────────────────────────────────────────
 function init() {
-  setupModeSelection();
+  vsPlayerId = getOrCreatePlayerId();
+  setupLanding();
+  setupSoloModeSelect();
+  setupVersusLobby();
+  setupVersusCreate();
+  setupVersusJoin();
   setupBackButton();
   setupPlayAgain();
   setupGiveUp();
@@ -608,7 +1048,8 @@ function init() {
   setupStarterToggle();
   setupHelpButton();
   setupOnscreenKeyboard();
-  fetchPlayers();
+  // Prefetch players in background so autocomplete is ready
+  fetchPlayers(true);
 }
 
 init();

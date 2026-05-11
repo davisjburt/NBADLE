@@ -14,10 +14,32 @@
   </head>
   <body>
     <div class="container">
-      <!-- START SCREEN -->
-      <div id="start-screen">
+
+      <!-- ── LANDING SCREEN ───────────────────────────────────── -->
+      <div id="landing-screen">
         <h1>NBADLE</h1>
         <p class="start-subtitle">Guess the NBA player. New game every time.</p>
+        <div class="mode-buttons">
+          <button class="mode-btn" id="solo-btn">
+            <span class="mode-icon">🏀</span>
+            <span class="mode-label">Solo</span>
+            <span class="mode-desc">Play by yourself</span>
+          </button>
+          <button class="mode-btn" id="versus-btn">
+            <span class="mode-icon">⚔</span>
+            <span class="mode-label">Versus</span>
+            <span class="mode-desc">Challenge a friend</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ── SOLO MODE SELECT ─────────────────────────────────── -->
+      <div id="start-screen" style="display: none">
+        <div class="screen-back-bar">
+          <button class="back-link-btn" id="solo-back-btn">❮ Back</button>
+          <span class="screen-logo">NBADLE</span>
+        </div>
+        <p class="start-subtitle sub-screen-subtitle">Choose your mode</p>
         <div class="mode-buttons">
           <button class="mode-btn" data-mode="classic">
             <span class="mode-icon">🏀</span>
@@ -32,13 +54,100 @@
         </div>
       </div>
 
-      <!-- GAME SCREEN -->
+      <!-- ── VERSUS LOBBY ─────────────────────────────────────── -->
+      <div id="versus-lobby-screen" style="display: none">
+        <div class="screen-back-bar">
+          <button class="back-link-btn" id="versus-back-btn">❮ Back</button>
+          <span class="screen-logo">NBADLE</span>
+        </div>
+        <p class="start-subtitle sub-screen-subtitle">Versus Mode</p>
+        <div class="mode-buttons">
+          <button class="mode-btn" id="create-game-btn">
+            <span class="mode-icon">🔑</span>
+            <span class="mode-label">Create</span>
+            <span class="mode-desc">Host a game &amp; share PIN</span>
+          </button>
+          <button class="mode-btn" id="join-game-btn">
+            <span class="mode-icon">🎮</span>
+            <span class="mode-label">Join</span>
+            <span class="mode-desc">Enter your opponent's PIN</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ── VERSUS CREATE SCREEN ─────────────────────────────── -->
+      <div id="versus-create-screen" style="display: none">
+
+        <!-- Step 1: mode select -->
+        <div id="vs-mode-select-step">
+          <div class="screen-back-bar">
+            <button class="back-link-btn" id="vs-create-back-btn">❮ Back</button>
+            <span class="screen-logo">NBADLE</span>
+          </div>
+          <p class="start-subtitle sub-screen-subtitle">Choose game mode</p>
+          <!-- Starters-only toggle for host -->
+          <div class="vs-starters-row">
+            <label class="switch">
+              <input type="checkbox" id="vs-starter-toggle" />
+              <span class="slider"></span>
+            </label>
+            <span class="vs-starters-label">Starters Only</span>
+          </div>
+          <div class="mode-buttons">
+            <button class="mode-btn" data-vs-mode="classic">
+              <span class="mode-icon">🏀</span>
+              <span class="mode-label">Classic</span>
+              <span class="mode-desc">Team · Conf · Pos · Height · Age · #</span>
+            </button>
+            <button class="mode-btn" data-vs-mode="stats">
+              <span class="mode-icon">📊</span>
+              <span class="mode-label">Stats</span>
+              <span class="mode-desc">PTS · REB · AST · STL · BLK · 3PM</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Step 2: waiting for opponent -->
+        <div id="vs-waiting-step" style="display: none" class="vs-waiting-container">
+          <div class="screen-back-bar">
+            <button class="back-link-btn" id="cancel-vs-btn">✕ Cancel</button>
+            <span class="screen-logo">NBADLE</span>
+          </div>
+          <p class="vs-share-text">Share this PIN with your opponent:</p>
+          <div class="pin-display" id="vs-pin-display">------</div>
+          <p class="vs-waiting-status" id="vs-waiting-status">Creating game…</p>
+          <button class="btn-secondary" id="copy-pin-btn">Copy PIN</button>
+        </div>
+
+      </div>
+
+      <!-- ── VERSUS JOIN SCREEN ───────────────────────────────── -->
+      <div id="versus-join-screen" style="display: none" class="vs-join-container">
+        <div class="screen-back-bar">
+          <button class="back-link-btn" id="vs-join-back-btn">❮ Back</button>
+          <span class="screen-logo">NBADLE</span>
+        </div>
+        <p class="start-subtitle sub-screen-subtitle">Enter game PIN</p>
+        <div class="pin-input-group">
+          <input
+            type="text"
+            id="pin-input"
+            placeholder="ABC123"
+            maxlength="6"
+            autocomplete="off"
+            autocapitalize="characters"
+            spellcheck="false"
+          />
+          <p class="join-error" id="join-error" style="display: none"></p>
+          <button class="btn-primary" id="join-game-submit-btn">Join Game</button>
+        </div>
+      </div>
+
+      <!-- ── GAME SCREEN ──────────────────────────────────────── -->
       <div id="game-screen" style="display: none">
         <div class="game-header">
           <div class="header-left">
-            <button id="back-button" class="icon-btn" aria-label="Back">
-              ❮
-            </button>
+            <button id="back-button" class="icon-btn" aria-label="Back">❮</button>
           </div>
           <h1 id="game-title">NBADLE – Classic</h1>
           <div class="header-right">
@@ -49,10 +158,18 @@
               </label>
               <span class="filter-label">Starters Only</span>
             </div>
-            <button id="help-button" class="icon-btn" aria-label="How to Play">
-              ?
-            </button>
+            <button id="help-button" class="icon-btn" aria-label="How to Play">?</button>
             <button id="give-up-button" class="give-up-btn">Give Up</button>
+          </div>
+        </div>
+
+        <!-- VS status bar (hidden in solo) -->
+        <div id="vs-status-bar" style="display: none">
+          <div class="vs-status-inner">
+            <span class="vs-player-stat">You: <strong id="vs-your-guesses">0</strong></span>
+            <span class="vs-vs-label">VS</span>
+            <span class="vs-player-stat">Opponent: <strong id="vs-opponent-guesses">0</strong></span>
+            <span class="vs-pin-chip">PIN: <strong id="vs-game-pin">------</strong></span>
           </div>
         </div>
 
@@ -70,8 +187,7 @@
               <div id="autocomplete-list" class="autocomplete-items"></div>
             </div>
             <div class="guess-counter">
-              Guess <span id="guess-count">0</span> /
-              <span id="guess-max">8</span>
+              Guess <span id="guess-count">0</span><span id="guess-max-part"> / <span id="guess-max">8</span></span>
             </div>
           </div>
           <div class="hint-panel">
@@ -112,12 +228,14 @@
           <div id="guesses-container"></div>
         </div>
       </div>
+
     </div>
 
-    <!-- Win Modal -->
+    <!-- Win / Result Modal -->
     <div id="win-modal" class="modal-overlay">
       <div class="modal-content">
         <h2 id="win-title">You Got It!</h2>
+        <p id="win-subtitle" class="win-subtitle" style="display: none"></p>
         <p><strong id="win-name" style="font-size: 22px"></strong></p>
         <img id="headshot-img" src="" alt="Player" />
         <button class="btn-primary" id="play-again-btn">New Game</button>
@@ -172,7 +290,7 @@
           <p>
             ⭐ <strong>Starters Only</strong> — limits pool to impact players.
           </p>
-          <p>🎯 You have <strong>8 guesses</strong> per game.</p>
+          <p>🎯 Solo: <strong>8 guesses</strong>. Versus: <strong>unlimited</strong> — first to guess right wins!</p>
         </div>
         <button class="btn-primary" id="help-close-btn">Got It!</button>
       </div>

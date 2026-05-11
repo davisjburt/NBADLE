@@ -246,14 +246,14 @@ function renderRow(stats, cols) {
       " " +
       (c !== "name" ? stats[c].status || "" : "")
     ).trim();
+    const inner = document.createElement("div");
+    inner.className = "inner";
     if (c === "name") {
-      div.textContent = stats[c];
+      inner.textContent = stats[c];
     } else {
-      const inner = document.createElement("div");
-      inner.className = "inner";
       inner.textContent = stats[c].val + (stats[c].arrow || "");
-      div.appendChild(inner);
     }
+    div.appendChild(inner);
     row.appendChild(div);
   });
 
@@ -531,8 +531,8 @@ async function startSoloGame() {
 
   const classicHeader = document.getElementById("classic-header");
   const statsHeader = document.getElementById("stats-header");
-  document.getElementById("game-title").textContent =
-    currentMode === "classic" ? "NBADLE – Classic" : "NBADLE – Stats";
+  document.getElementById("game-mode-label").textContent =
+    currentMode === "classic" ? "Classic" : "Stats";
   classicHeader.style.display = currentMode === "classic" ? "flex" : "none";
   statsHeader.style.display = currentMode === "stats" ? "flex" : "none";
 
@@ -747,8 +747,8 @@ async function startVsGame(yourCount = 0, oppCount = 0) {
 
   const classicHeader = document.getElementById("classic-header");
   const statsHeader = document.getElementById("stats-header");
-  document.getElementById("game-title").textContent =
-    currentMode === "classic" ? "NBADLE – Classic" : "NBADLE – Stats";
+  document.getElementById("game-mode-label").textContent =
+    currentMode === "classic" ? "Classic" : "Stats";
   classicHeader.style.display = currentMode === "classic" ? "flex" : "none";
   statsHeader.style.display = currentMode === "stats" ? "flex" : "none";
 

@@ -412,15 +412,30 @@ body {
 }
 
 #game-title {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  margin: 0;
+  line-height: 1;
+  text-align: center;
+}
+#game-title .title-logo {
   font-family: "Impact", "Arial Black", sans-serif;
-  font-size: clamp(14px, 4vw, 30px);
-  font-weight: 900;
-  color: #111;
+  font-size: clamp(1.1rem, 4.5vw, 1.9rem);
+  color: #ff4500;
+  -webkit-text-stroke: clamp(0.5px, 0.15vw, 1px) #7f1500;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  text-align: center;
-  white-space: nowrap;
-  margin: 0;
+  line-height: 1;
+}
+#game-mode-label {
+  font-family: "Impact", "Arial Black", sans-serif;
+  font-size: clamp(7px, 2vw, 12px);
+  color: #444;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  line-height: 1.2;
 }
 
 .starter-filter {
@@ -632,15 +647,16 @@ input:checked + .slider:before {
   padding: 11px 13px;
   font-size: 15px;
   border: 2px solid #333;
-  border-radius: 4px;
+  border-radius: 0;
   outline: none;
   background: #fff;
   font-family: "Verdana", sans-serif;
   -webkit-appearance: none;
+  box-shadow: 2px 2px 0 #333;
 }
 #player-input:focus {
   border-color: #ff4500;
-  box-shadow: 0 0 0 3px rgba(255, 69, 0, 0.12);
+  box-shadow: 3px 3px 0 #ff4500;
 }
 
 .guess-counter {
@@ -661,6 +677,7 @@ input:checked + .slider:before {
   position: absolute;
   border: 2px solid #333;
   border-top: none;
+  border-radius: 0;
   z-index: 99;
   top: 100%;
   left: 0;
@@ -818,7 +835,10 @@ input:checked + .slider:before {
   padding-left: 8px;
   color: #222;
   text-align: left;
+}
+.name-cell .inner {
   overflow: hidden;
+  max-width: calc(100% - 4px);
 }
 
 .inner {
@@ -826,27 +846,34 @@ input:checked + .slider:before {
   align-items: center;
   gap: 2px;
   padding: 2px 4px;
-  border-radius: 3px;
-  border: 2px solid #ddd;
+  border-radius: 0;
+  border: 2px solid #bbb;
   color: #444;
   font-size: clamp(8px, 1.8vw, 12px);
   white-space: nowrap;
+  box-shadow: 2px 2px 0 #999;
+  max-width: calc(100% - 4px);
+  margin-bottom: 2px;
+  margin-right: 2px;
 }
 
 .cell.match .inner {
   border-color: #27ae60;
   background: #eafaf1;
   color: #1e8449;
+  box-shadow: 2px 2px 0 #1e8449;
 }
 .cell.partial .inner {
   border-color: #f1c40f;
   background: #fefde7;
   color: #7d6608;
+  box-shadow: 2px 2px 0 #c9a100;
 }
 .cell.nomatch .inner {
-  border-color: #ddd;
+  border-color: #bbb;
   color: #666;
   background: #fafafa;
+  box-shadow: 2px 2px 0 #999;
 }
 
 .cell.match .inner::after {
@@ -854,7 +881,7 @@ input:checked + .slider:before {
   background: #27ae60;
   color: #fff;
   padding: 0 3px;
-  border-radius: 2px;
+  border-radius: 0;
   font-size: clamp(7px, 1.5vw, 11px);
   margin-left: 1px;
 }
@@ -863,7 +890,7 @@ input:checked + .slider:before {
   background: #f1c40f;
   color: #fff;
   padding: 0 3px;
-  border-radius: 2px;
+  border-radius: 0;
   font-size: clamp(7px, 1.5vw, 11px);
   margin-left: 1px;
 }
@@ -1300,8 +1327,11 @@ body.osk-open {
     margin-bottom: 14px;
     gap: 12px;
   }
-  #game-title {
-    font-size: clamp(22px, 2.5vw, 32px);
+  #game-title .title-logo {
+    font-size: clamp(1.3rem, 2.5vw, 2rem);
+  }
+  #game-mode-label {
+    font-size: clamp(9px, 1.2vw, 13px);
   }
 
   .icon-btn {

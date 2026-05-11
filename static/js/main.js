@@ -23,6 +23,7 @@ let vsGameStarted = false;
 let vsPollingInterval = null;
 let vsOpponentGuessCount = 0;
 let vsRound = 1;
+let vsForfeited = false;
 
 // Touch detection
 const IS_TOUCH = navigator.maxTouchPoints > 0 || "ontouchstart" in window;
@@ -288,14 +289,23 @@ function showWinModal(gaveUp) {
   const rematchBtn = document.getElementById("vs-rematch-btn");
 
   if (vsMode) {
-    const weWon = vsWinner === vsRole;
-    titleEl.textContent = weWon ? "You Won!" : "Opponent Got It!";
-    titleEl.style.color = weWon ? "#27ae60" : "#c0392b";
-    if (subtitleEl) {
-      subtitleEl.textContent = weWon
-        ? `You guessed it in ${guessCount} ${guessCount === 1 ? "guess" : "guesses"}!`
-        : "Better luck next time.";
-      subtitleEl.style.display = "";
+    if (vsForfeited) {
+      titleEl.textContent = "You Gave Up!";
+      titleEl.style.color = "#c0392b";
+      if (subtitleEl) {
+        subtitleEl.textContent = "Your opponent wins this round.";
+        subtitleEl.style.display = "";
+      }
+    } else {
+      const weWon = vsWinner === vsRole;
+      titleEl.textContent = weWon ? "You Won!" : "Opponent Got It!";
+      titleEl.style.color = weWon ? "#27ae60" : "#c0392b";
+      if (subtitleEl) {
+        subtitleEl.textContent = weWon
+          ? `You guessed it in ${guessCount} ${guessCount === 1 ? "guess" : "guesses"}!`
+          : "Better luck next time.";
+        subtitleEl.style.display = "";
+      }
     }
     // Host gets "Play Again"; challenger sees lobby button only
     // (challenger's game will auto-start when host triggers rematch)
@@ -464,7 +474,6 @@ function resetHintVisuals() {
 // ── VS UI helpers ──────────────────────────────────────────────
 function enterVsGameUi() {
   document.getElementById("vs-status-bar").style.display = "";
-  document.getElementById("give-up-button").style.display = "none";
   document.getElementById("guess-max-part").style.display = "none";
   document.querySelector(".starter-filter").style.display = "none";
   // Counts and PIN are read from the live state variables at call time
@@ -734,6 +743,7 @@ async function startVsGame(yourCount = 0, oppCount = 0) {
   guessCount = yourCount;
   vsOpponentGuessCount = oppCount;
   gameOver = false;
+  vsForfeited = false;
 
   const classicHeader = document.getElementById("classic-header");
   const statsHeader = document.getElementById("stats-header");
@@ -819,15 +829,12 @@ async function pollVsStatus() {
       if (yourEl) yourEl.textContent = guessCount;
     }
 
-    // Detect opponent win (we haven't won yet ourselves)
+    // Detect winner (opponent guessed correctly or opponent forfeited giving us the win)
     if (data.winner && !vsWinner) {
       vsWinner = data.winner;
-      const weWon =
-        (vsRole === "host" && data.winner === "host") ||
-        (vsRole === "challenger" && data.winner === "challenger");
 
-      if (!weWon) {
-        // Polling stays alive to catch a rematch
+      // Only show modal if we haven't already ended the game locally
+      if (!gameOver) {
         gameOver = true;
         if (data.target_player) targetPlayer = data.target_player;
         if (targetPlayer) {
@@ -909,6 +916,7 @@ function resetVsState() {
   vsGameStarted = false;
   vsOpponentGuessCount = 0;
   vsRound = 1;
+  vsForfeited = false;
 }
 
 // ── Back button ────────────────────────────────────────────────
@@ -960,9 +968,25 @@ function setupPlayAgain() {
 
 // ── Give up ────────────────────────────────────────────────────
 function setupGiveUp() {
-  document.getElementById("give-up-button").addEventListener("click", () => {
-    if (!targetPlayer || vsMode) return;
+  document.getElementById("give-up-button").addEventListener("click", async () => {
+    if (!targetPlayer || gameOver) return;
     gameOver = true;
+    document.getElementById("player-input").disabled = true;
+
+    if (vsMode) {
+      vsForfeited = true;
+      vsWinner = vsRole === "host" ? "challenger" : "host";
+      try {
+        await fetch("/api/vs/forfeit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin: vsPin, player_id: vsPlayerId }),
+        });
+      } catch (err) {
+        console.warn("Failed to report VS forfeit", err);
+      }
+    }
+
     showWinModal(true);
   });
 }
@@ -1089,6 +1113,7 @@ function setupOnscreenKeyboard() {
 
 // ── Init ───────────────────────────────────────────────────────
 function init() {
+  if (typeof lucide !== "undefined") lucide.createIcons();
   vsPlayerId = getOrCreatePlayerId();
   setupLanding();
   setupSoloModeSelect();

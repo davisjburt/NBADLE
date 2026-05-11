@@ -11,6 +11,7 @@
       rel="stylesheet"
       href="{{ url_for('static', filename='css/styles.css') }}"
     />
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   </head>
   <body>
     <div class="container">
@@ -21,12 +22,12 @@
         <p class="start-subtitle">Guess the NBA player. New game every time.</p>
         <div class="mode-buttons">
           <button class="mode-btn" id="solo-btn">
-            <span class="mode-icon">🏀</span>
+            <span class="mode-icon"><i data-lucide="user"></i></span>
             <span class="mode-label">Solo</span>
             <span class="mode-desc">Play by yourself</span>
           </button>
           <button class="mode-btn" id="versus-btn">
-            <span class="mode-icon">⚔</span>
+            <span class="mode-icon"><i data-lucide="users"></i></span>
             <span class="mode-label">Versus</span>
             <span class="mode-desc">Challenge a friend</span>
           </button>
@@ -36,18 +37,18 @@
       <!-- ── SOLO MODE SELECT ─────────────────────────────────── -->
       <div id="start-screen" style="display: none">
         <div class="screen-back-bar">
-          <button class="back-link-btn" id="solo-back-btn">❮ Back</button>
+          <button class="back-link-btn" id="solo-back-btn"><i data-lucide="chevron-left"></i> Back</button>
           <span class="screen-logo">NBADLE</span>
         </div>
         <p class="start-subtitle sub-screen-subtitle">Choose your mode</p>
         <div class="mode-buttons">
           <button class="mode-btn" data-mode="classic">
-            <span class="mode-icon">🏀</span>
+            <span class="mode-icon"><i data-lucide="layout-list"></i></span>
             <span class="mode-label">Classic</span>
             <span class="mode-desc">Team · Conf · Pos · Height · Age · #</span>
           </button>
           <button class="mode-btn" data-mode="stats">
-            <span class="mode-icon">📊</span>
+            <span class="mode-icon"><i data-lucide="bar-chart-2"></i></span>
             <span class="mode-label">Stats</span>
             <span class="mode-desc">PTS · REB · AST · STL · BLK · 3PM</span>
           </button>
@@ -57,18 +58,18 @@
       <!-- ── VERSUS LOBBY ─────────────────────────────────────── -->
       <div id="versus-lobby-screen" style="display: none">
         <div class="screen-back-bar">
-          <button class="back-link-btn" id="versus-back-btn">❮ Back</button>
+          <button class="back-link-btn" id="versus-back-btn"><i data-lucide="chevron-left"></i> Back</button>
           <span class="screen-logo">NBADLE</span>
         </div>
         <p class="start-subtitle sub-screen-subtitle">Versus Mode</p>
         <div class="mode-buttons">
           <button class="mode-btn" id="create-game-btn">
-            <span class="mode-icon">🔑</span>
+            <span class="mode-icon"><i data-lucide="key"></i></span>
             <span class="mode-label">Create</span>
             <span class="mode-desc">Host a game &amp; share PIN</span>
           </button>
           <button class="mode-btn" id="join-game-btn">
-            <span class="mode-icon">🎮</span>
+            <span class="mode-icon"><i data-lucide="log-in"></i></span>
             <span class="mode-label">Join</span>
             <span class="mode-desc">Enter your opponent's PIN</span>
           </button>
@@ -81,7 +82,7 @@
         <!-- Step 1: mode select -->
         <div id="vs-mode-select-step">
           <div class="screen-back-bar">
-            <button class="back-link-btn" id="vs-create-back-btn">❮ Back</button>
+            <button class="back-link-btn" id="vs-create-back-btn"><i data-lucide="chevron-left"></i> Back</button>
             <span class="screen-logo">NBADLE</span>
           </div>
           <p class="start-subtitle sub-screen-subtitle">Choose game mode</p>
@@ -95,12 +96,12 @@
           </div>
           <div class="mode-buttons">
             <button class="mode-btn" data-vs-mode="classic">
-              <span class="mode-icon">🏀</span>
+              <span class="mode-icon"><i data-lucide="layout-list"></i></span>
               <span class="mode-label">Classic</span>
               <span class="mode-desc">Team · Conf · Pos · Height · Age · #</span>
             </button>
             <button class="mode-btn" data-vs-mode="stats">
-              <span class="mode-icon">📊</span>
+              <span class="mode-icon"><i data-lucide="bar-chart-2"></i></span>
               <span class="mode-label">Stats</span>
               <span class="mode-desc">PTS · REB · AST · STL · BLK · 3PM</span>
             </button>
@@ -110,7 +111,7 @@
         <!-- Step 2: waiting for opponent -->
         <div id="vs-waiting-step" style="display: none" class="vs-waiting-container">
           <div class="screen-back-bar">
-            <button class="back-link-btn" id="cancel-vs-btn">✕ Cancel</button>
+            <button class="back-link-btn" id="cancel-vs-btn"><i data-lucide="x"></i> Cancel</button>
             <span class="screen-logo">NBADLE</span>
           </div>
           <p class="vs-share-text">Share this PIN with your opponent:</p>
@@ -124,7 +125,7 @@
       <!-- ── VERSUS JOIN SCREEN ───────────────────────────────── -->
       <div id="versus-join-screen" style="display: none" class="vs-join-container">
         <div class="screen-back-bar">
-          <button class="back-link-btn" id="vs-join-back-btn">❮ Back</button>
+          <button class="back-link-btn" id="vs-join-back-btn"><i data-lucide="chevron-left"></i> Back</button>
           <span class="screen-logo">NBADLE</span>
         </div>
         <p class="start-subtitle sub-screen-subtitle">Enter game PIN</p>
@@ -147,7 +148,7 @@
       <div id="game-screen" style="display: none">
         <div class="game-header">
           <div class="header-left">
-            <button id="back-button" class="icon-btn" aria-label="Back">❮</button>
+            <button id="back-button" class="icon-btn" aria-label="Back"><i data-lucide="chevron-left"></i></button>
           </div>
           <h1 id="game-title">NBADLE – Classic</h1>
           <div class="header-right">
@@ -196,7 +197,7 @@
               <img id="team-logo-img" alt="Team Logo" />
               <canvas id="silhouette-canvas"></canvas>
               <div id="silhouette-placeholder" class="hint-placeholder">
-                <span class="hint-icon">🔍</span>
+                <span class="hint-icon"><i data-lucide="eye"></i></span>
                 <span>Hint</span>
               </div>
             </div>
@@ -251,7 +252,7 @@
         <h2 class="help-title">How to Play</h2>
         <div class="help-modes">
           <div class="help-mode-block">
-            <div class="help-mode-header">🏀 Classic</div>
+            <div class="help-mode-header"><i data-lucide="layout-list"></i> Classic</div>
             <p>
               Clues reveal
               <strong>Team, Conf, Div, Position, Height, Age,</strong> and
@@ -259,7 +260,7 @@
             </p>
           </div>
           <div class="help-mode-block">
-            <div class="help-mode-header">📊 Stats</div>
+            <div class="help-mode-header"><i data-lucide="bar-chart-2"></i> Stats</div>
             <p>
               Clues compare <strong>PTS, REB, AST, STL, BLK,</strong> and
               <strong>3PM</strong> averages.
@@ -287,13 +288,13 @@
         </div>
         <div class="help-extras">
           <p>
-            💡 <strong>Show Hint</strong> — silhouette (Classic) or team logo
+            <i data-lucide="lightbulb"></i> <strong>Show Hint</strong> — silhouette (Classic) or team logo
             (Stats).
           </p>
           <p>
-            ⭐ <strong>Starters Only</strong> — limits pool to impact players.
+            <i data-lucide="star"></i> <strong>Starters Only</strong> — limits pool to impact players.
           </p>
-          <p>🎯 Solo: <strong>8 guesses</strong>. Versus: <strong>unlimited</strong> — first to guess right wins!</p>
+          <p><i data-lucide="crosshair"></i> Solo: <strong>8 guesses</strong>. Versus: <strong>unlimited</strong> — first to guess right wins!</p>
         </div>
         <button class="btn-primary" id="help-close-btn">Got It!</button>
       </div>

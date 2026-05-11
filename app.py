@@ -258,5 +258,28 @@ def vs_rematch():
     })
 
 
+@app.route("/api/vs/forfeit", methods=["POST"])
+def vs_forfeit():
+    data = request.get_json() or {}
+    pin = data.get("pin", "").upper()
+    player_id = data.get("player_id", "")
+
+    if pin not in vs_rooms:
+        return jsonify({"error": "Room not found"}), 404
+
+    room = vs_rooms[pin]
+    if room["winner"]:
+        return jsonify({"winner": room["winner"]})
+
+    if player_id == room["host_id"]:
+        room["winner"] = "challenger"
+    elif player_id == room["challenger_id"]:
+        room["winner"] = "host"
+    else:
+        return jsonify({"error": "Not in this room"}), 403
+
+    return jsonify({"winner": room["winner"]})
+
+
 if __name__ == "__main__":
     app.run(port=5001)

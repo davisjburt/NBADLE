@@ -340,6 +340,40 @@ body {
   color: #666;
 }
 
+/* ── Lucide icon sizing ── */
+.mode-icon svg {
+  width: clamp(22px, 5vw, 28px);
+  height: clamp(22px, 5vw, 28px);
+}
+.icon-btn svg {
+  width: 16px;
+  height: 16px;
+}
+.back-link-btn svg {
+  width: 14px;
+  height: 14px;
+  vertical-align: -2px;
+}
+.give-up-btn svg {
+  width: 12px;
+  height: 12px;
+  vertical-align: -1px;
+}
+.hint-icon svg {
+  width: 22px;
+  height: 22px;
+}
+.help-mode-header svg {
+  width: 14px;
+  height: 14px;
+  vertical-align: -2px;
+}
+.help-extras p svg {
+  width: 13px;
+  height: 13px;
+  vertical-align: -2px;
+}
+
 /* ============================================================
    GAME HEADER
    ============================================================ */
@@ -1144,6 +1178,14 @@ body.osk-open {
   .hint-icon {
     font-size: 20px;
   }
+  .hint-icon svg {
+    width: 20px;
+    height: 20px;
+  }
+  .icon-btn svg {
+    width: 17px;
+    height: 17px;
+  }
   .hint-placeholder {
     font-size: 11px;
   }
@@ -1243,6 +1285,14 @@ body.osk-open {
   }
   .hint-icon {
     font-size: 26px;
+  }
+  .hint-icon svg {
+    width: 26px;
+    height: 26px;
+  }
+  .icon-btn svg {
+    width: 18px;
+    height: 18px;
   }
   #hint-button {
     font-size: 14px;

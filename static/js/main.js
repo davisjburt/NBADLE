@@ -22,6 +22,7 @@ let vsWinner = null;       // 'host' | 'challenger' | null
 let vsGameStarted = false;
 let vsPollingInterval = null;
 let vsOpponentGuessCount = 0;
+let vsRound = 1;
 
 // Touch detection
 const IS_TOUCH = navigator.maxTouchPoints > 0 || "ontouchstart" in window;
@@ -264,7 +265,7 @@ function renderRow(stats, cols) {
     reportVsGuess(won);
     if (won) {
       vsWinner = vsRole;
-      stopVsPolling();
+      // Keep polling alive — it will detect rematch (round change) automatically
       gameOver = true;
       document.getElementById("player-input").disabled = true;
       setTimeout(() => showWinModal(false), 500);
@@ -284,6 +285,7 @@ function showWinModal(gaveUp) {
   const titleEl = document.getElementById("win-title");
   const subtitleEl = document.getElementById("win-subtitle");
   const playAgainBtn = document.getElementById("play-again-btn");
+  const rematchBtn = document.getElementById("vs-rematch-btn");
 
   if (vsMode) {
     const weWon = vsWinner === vsRole;
@@ -295,11 +297,17 @@ function showWinModal(gaveUp) {
         : "Better luck next time.";
       subtitleEl.style.display = "";
     }
+    // Host gets "Play Again"; challenger sees lobby button only
+    // (challenger's game will auto-start when host triggers rematch)
+    rematchBtn.style.display = vsRole === "host" ? "" : "none";
+    rematchBtn.disabled = false;
+    rematchBtn.textContent = "Play Again";
     playAgainBtn.textContent = "Back to Lobby";
   } else {
     titleEl.textContent = gaveUp ? "The Player Was" : "You Got It!";
     titleEl.style.color = gaveUp ? "#c0392b" : "#27ae60";
     if (subtitleEl) subtitleEl.style.display = "none";
+    rematchBtn.style.display = "none";
     playAgainBtn.textContent = "New Game";
   }
 
@@ -769,18 +777,32 @@ async function pollVsStatus() {
     if (!res.ok) return;
     const data = await res.json();
 
-    // Host waiting for challenger to join
+    // Phase 1 — host waiting for challenger to join
     if (vsRole === "host" && !vsGameStarted) {
       if (data.started) {
         vsGameStarted = true;
-        // Pass challenger's current count so host sees accurate opponent tally
         await startVsGame(0, data.challenger_guess_count || 0);
-        startVsPolling(); // restart polling now that game is live
+        startVsPolling();
       }
       return;
     }
 
-    // In-game: sync both counts from server truth
+    // Phase 3 — rematch: server round advanced (challenger detects host's Play Again)
+    if (data.round > vsRound) {
+      vsRound = data.round;
+      targetPlayer = data.target_player;
+      targetImages = null;
+      vsWinner = null;
+      gameOver = false;
+      document.getElementById("win-modal").style.display = "none";
+      await startVsGame(0, 0);
+      return;
+    }
+
+    // Phase 2 — in-game (skip count/win updates once game is over; wait for rematch)
+    if (gameOver) return;
+
+    // Sync both counts from server truth
     vsOpponentGuessCount =
       vsRole === "host" ? data.challenger_guess_count : data.host_guess_count;
     const serverYours =
@@ -798,14 +820,14 @@ async function pollVsStatus() {
     }
 
     // Detect opponent win (we haven't won yet ourselves)
-    if (data.winner && !vsWinner && !gameOver) {
+    if (data.winner && !vsWinner) {
       vsWinner = data.winner;
       const weWon =
         (vsRole === "host" && data.winner === "host") ||
         (vsRole === "challenger" && data.winner === "challenger");
 
       if (!weWon) {
-        stopVsPolling();
+        // Polling stays alive to catch a rematch
         gameOver = true;
         if (data.target_player) targetPlayer = data.target_player;
         if (targetPlayer) {
@@ -845,6 +867,38 @@ async function reportVsGuess(correct) {
   }
 }
 
+// ── VS rematch (host only) ─────────────────────────────────────
+function setupVsRematch() {
+  document.getElementById("vs-rematch-btn").addEventListener("click", async () => {
+    const btn = document.getElementById("vs-rematch-btn");
+    btn.disabled = true;
+    btn.textContent = "Starting…";
+
+    try {
+      const res = await fetch("/api/vs/rematch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: vsPin, player_id: vsPlayerId }),
+      });
+      if (!res.ok) throw new Error("rematch failed");
+      const data = await res.json();
+
+      vsRound = data.round;
+      targetPlayer = data.target_player;
+      targetImages = null;
+      vsWinner = null;
+      gameOver = false;
+
+      document.getElementById("win-modal").style.display = "none";
+      await startVsGame(0, 0);
+      // Polling already running — challenger will detect the new round automatically
+    } catch (_) {
+      btn.disabled = false;
+      btn.textContent = "Play Again";
+    }
+  });
+}
+
 // ── VS state reset ─────────────────────────────────────────────
 function resetVsState() {
   stopVsPolling();
@@ -854,6 +908,7 @@ function resetVsState() {
   vsWinner = null;
   vsGameStarted = false;
   vsOpponentGuessCount = 0;
+  vsRound = 1;
 }
 
 // ── Back button ────────────────────────────────────────────────
@@ -1040,6 +1095,7 @@ function init() {
   setupVersusLobby();
   setupVersusCreate();
   setupVersusJoin();
+  setupVsRematch();
   setupBackButton();
   setupPlayAgain();
   setupGiveUp();

@@ -123,6 +123,7 @@ def vs_create():
         "challenger_won": False,
         "winner": None,
         "started": False,
+        "round": 1,
         "created_at": time.time(),
     }
 
@@ -220,8 +221,40 @@ def vs_status(pin):
         "winner": room["winner"],
         "host_guess_count": room["host_guess_count"],
         "challenger_guess_count": room["challenger_guess_count"],
-        "target_player": room["target_player"] if room["winner"] else None,
+        "target_player": room["target_player"],
         "mode": room["mode"],
+        "round": room.get("round", 1),
+    })
+
+
+@app.route("/api/vs/rematch", methods=["POST"])
+def vs_rematch():
+    data = request.get_json() or {}
+    pin = data.get("pin", "").upper()
+    player_id = data.get("player_id", "")
+
+    if pin not in vs_rooms:
+        return jsonify({"error": "Room not found"}), 404
+
+    room = vs_rooms[pin]
+
+    if player_id != room["host_id"]:
+        return jsonify({"error": "Only the host can start a rematch"}), 403
+
+    new_target = _pick_random_player(room["starters_only"])
+
+    room["target_player"] = new_target
+    room["host_guess_count"] = 0
+    room["host_won"] = False
+    room["challenger_guess_count"] = 0
+    room["challenger_won"] = False
+    room["winner"] = None
+    room["round"] = room.get("round", 1) + 1
+
+    return jsonify({
+        "target_player": new_target,
+        "mode": room["mode"],
+        "round": room["round"],
     })
 
 

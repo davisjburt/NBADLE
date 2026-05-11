@@ -255,3 +255,24 @@ def fetch_players_from_nba():
     except Exception as e:
         print(f"Critical fetch error: {e}. Using fallback roster.")
         return PYTHON_FALLBACK_ROSTER
+
+
+if __name__ == "__main__":
+    import os
+    import urllib3
+    import requests
+
+    # Bypass SSL verification (local dev only — Render has valid certs)
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    _orig_request = requests.Session.request
+    def _no_verify(self, *a, **kw):
+        kw.setdefault("verify", False)
+        return _orig_request(self, *a, **kw)
+    requests.Session.request = _no_verify
+
+    # Delete existing cache so a fresh fetch is forced
+    if os.path.exists(CACHE_FILE):
+        os.remove(CACHE_FILE)
+        print(f"Deleted old cache: {CACHE_FILE}")
+    players = fetch_players_from_nba()
+    print(f"Done. {len(players)} players cached.")

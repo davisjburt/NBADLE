@@ -251,6 +251,14 @@ body {
   margin: 2px 0 0;
 }
 
+/* Stacked buttons at bottom of win modal */
+.modal-btn-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
 /* ============================================================
    START SCREEN  (legacy — kept for #start-screen h1 reference)
    ============================================================ */

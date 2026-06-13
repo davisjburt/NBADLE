@@ -203,6 +203,7 @@ function renderRow(stats, cols) {
     ).trim();
     if (c === "name") {
       div.textContent = stats[c];
+      div.title = stats[c];
     } else {
       const inner = document.createElement("div");
       inner.className = "inner";

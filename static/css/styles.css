@@ -884,7 +884,7 @@ input:checked + .slider:before {
   padding: 0 3px;
   border-radius: 0;
   font-size: clamp(7px, 1.5vw, 11px);
-  margin-left: 1px;
+  margin-left: 3px;
 }
 .cell.partial .inner::after {
   content: "~";
@@ -893,7 +893,7 @@ input:checked + .slider:before {
   padding: 0 3px;
   border-radius: 0;
   font-size: clamp(7px, 1.5vw, 11px);
-  margin-left: 1px;
+  margin-left: 3px;
 }
 
 /* ============================================================
@@ -1311,7 +1311,7 @@ body.osk-open {
   .board--cards-mobile .guess-row .cell.partial .inner::after {
     font-size: 6px;
     padding: 0 1px;
-    margin-left: 0;
+    margin-left: 3px;
   }
 }
 

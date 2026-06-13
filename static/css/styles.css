@@ -14,7 +14,8 @@ body {
   background-image: radial-gradient(#d0d0d0 1px, transparent 1px);
   background-size: 15px 15px;
   margin: 0;
-  padding: 14px 10px 32px;
+  padding: 14px max(10px, env(safe-area-inset-right)) max(32px, env(safe-area-inset-bottom))
+    max(10px, env(safe-area-inset-left));
   display: flex;
   justify-content: center;
   min-height: 100dvh;
@@ -1071,7 +1072,7 @@ input:checked + .slider:before {
 
 /* Pushes page content above keyboard */
 body.osk-open {
-  padding-bottom: 215px;
+  padding-bottom: max(215px, calc(200px + env(safe-area-inset-bottom)));
 }
 
 .osk-row {
@@ -1203,6 +1204,104 @@ body.osk-open {
   .back-link-btn:not(:active):hover {
     transform: scale(1.04);
     box-shadow: 3px 3px 0 #333;
+  }
+}
+
+/* ============================================================
+   MOBILE GUESS CARDS  — stacked layout under 768px
+   ============================================================ */
+@media (max-width: 767px) {
+  #game-title .title-logo {
+    font-size: clamp(1rem, 4vw, 1.4rem);
+  }
+
+  #game-mode-label {
+    font-size: 9px;
+    letter-spacing: 0.14em;
+  }
+
+  .header-right {
+    gap: 6px;
+  }
+
+  .give-up-btn {
+    font-size: 10px;
+    padding: 0 8px;
+  }
+
+  .board--cards-mobile .header-row {
+    display: none !important;
+  }
+
+  .board--cards-mobile {
+    gap: 8px;
+  }
+
+  .board--cards-mobile .guess-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    padding: 10px;
+    align-items: stretch;
+  }
+
+  .board--cards-mobile .guess-row .cell {
+    border-right: none;
+    min-width: 0;
+    padding: 0;
+  }
+
+  .board--cards-mobile .guess-row .name-cell {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    padding: 0 0 8px;
+    margin-bottom: 2px;
+    border-bottom: 1px solid #eee;
+  }
+
+  .board--cards-mobile .guess-row .name-cell .inner {
+    border: none;
+    box-shadow: none;
+    background: transparent;
+    color: #222;
+    font-size: 15px;
+    font-weight: bold;
+    line-height: 1.25;
+    white-space: normal;
+    overflow: visible;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .board--cards-mobile .guess-row .cell:not(.name-cell) {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
+
+  .board--cards-mobile .guess-row .cell:not(.name-cell)::before {
+    content: attr(data-label);
+    font-size: 9px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #777;
+    line-height: 1;
+  }
+
+  .board--cards-mobile .guess-row .cell:not(.name-cell) .inner {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    white-space: normal;
+    line-height: 1.15;
+    text-align: center;
+    font-size: 11px;
+    padding: 4px 3px;
   }
 }
 

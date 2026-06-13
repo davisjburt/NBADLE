@@ -232,6 +232,23 @@ function processGuess(guessName) {
   renderRow(stats, cols);
 }
 
+const CELL_LABELS = {
+  name: "Name",
+  team: "Team",
+  conf: "Conf",
+  div: "Div",
+  pos: "Pos",
+  height: "Ht",
+  age: "Age",
+  number: "#",
+  pts: "PTS",
+  reb: "REB",
+  ast: "AST",
+  stl: "STL",
+  blk: "BLK",
+  fg3m: "3PM",
+};
+
 // ── Render ─────────────────────────────────────────────────────
 function renderRow(stats, cols) {
   const container = document.getElementById("guesses-container");
@@ -246,6 +263,9 @@ function renderRow(stats, cols) {
       " " +
       (c !== "name" ? stats[c].status || "" : "")
     ).trim();
+    if (c !== "name") {
+      div.dataset.label = CELL_LABELS[c] || c;
+    }
     const inner = document.createElement("div");
     inner.className = "inner";
     if (c === "name") {

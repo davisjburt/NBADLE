@@ -250,6 +250,7 @@ function renderRow(stats, cols) {
     inner.className = "inner";
     if (c === "name") {
       inner.textContent = stats[c];
+      div.title = stats[c];
     } else {
       inner.textContent = stats[c].val + (stats[c].arrow || "");
     }

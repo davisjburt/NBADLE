@@ -14,9 +14,11 @@ export const TEAM_LOGO_IDS = {
   UTA: 1610612762, WAS: 1610612764,
 };
 
+// Served through our Worker (see /api/logo in src/index.js) rather than hotlinked,
+// so logos are cached on our origin and don't depend on the CDN accepting the browser.
 export function teamLogoUrl(team) {
-  const id = TEAM_LOGO_IDS[String(team || "").toUpperCase()];
-  return id ? `https://cdn.nba.com/logos/nba/${id}/global/L/logo.svg` : "";
+  const abbr = String(team || "").toUpperCase();
+  return TEAM_LOGO_IDS[abbr] ? `/api/logo/${abbr}` : "";
 }
 
 // Returns total inches, or null when the height is unknown.

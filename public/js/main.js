@@ -1,6 +1,8 @@
 // public/js/main.js
 
 import { MAX_GUESSES, COLUMNS, canBeTarget, compareGuess, teamLogoUrl } from "./compare.js";
+import { getStats, recordGame, winRate } from "./stats.js";
+import { shareResult, shareText } from "./share.js";
 
 let allPlayers = [];
 let players = [];
@@ -11,6 +13,9 @@ let currentMode = "classic";
 let startersOnly = false;
 let guessCount = 0;
 let gameOver = false;
+let guessRows = [];          // comparison rows for this round, oldest first
+let guessedIds = new Set();  // players already guessed this round
+let soloOutcome = null;      // 'won' | 'lost' | 'gaveup'
 
 // VS state
 let vsMode = false;
@@ -32,6 +37,7 @@ let vsStartersOnly = false;
 
 // Touch detection
 const IS_TOUCH = navigator.maxTouchPoints > 0 || "ontouchstart" in window;
+const REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 // All screen IDs — only one shown at a time
 const SCREENS = [
@@ -43,39 +49,173 @@ const SCREENS = [
   "game-screen",
 ];
 
+const CELL_LABELS = {
+  team: "Team",
+  conf: "Conf",
+  div: "Div",
+  pos: "Pos",
+  height: "Ht",
+  age: "Age",
+  number: "#",
+  pts: "PTS",
+  reb: "REB",
+  ast: "AST",
+  stl: "STL",
+  blk: "BLK",
+  fg3m: "3PM",
+};
+
+const STATUS_TEXT = { match: "correct", partial: "close", nomatch: "no match" };
+
+const $ = (id) => document.getElementById(id);
+
 // ── Screen manager ─────────────────────────────────────────────
 function showScreen(id) {
   SCREENS.forEach((s) => {
-    const el = document.getElementById(s);
+    const el = $(s);
     if (el) el.style.display = s === id ? "" : "none";
   });
+  window.scrollTo(0, 0);
 }
 
 // ── Player ID (persisted across visits) ───────────────────────
 function getOrCreatePlayerId() {
-  let id = localStorage.getItem("nbadle_player_id");
+  let id = null;
+  try {
+    id = localStorage.getItem("nbadle_player_id");
+  } catch {
+    // Storage unavailable; a per-page id still works for this session
+  }
   if (!id) {
     id =
       "p_" +
       Math.random().toString(36).slice(2) +
       Math.random().toString(36).slice(2);
-    localStorage.setItem("nbadle_player_id", id);
+    try {
+      localStorage.setItem("nbadle_player_id", id);
+    } catch {
+      // Not persisted
+    }
   }
   return id;
 }
 
-// ── Guess counter ──────────────────────────────────────────────
-function updateGuessCounter() {
-  const el = document.getElementById("guess-count");
-  if (el) el.textContent = guessCount;
+// ── Toast / modals ─────────────────────────────────────────────
+let toastTimer = null;
+function toast(message) {
+  const el = $("toast");
+  el.textContent = message;
+  el.classList.add("is-visible");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("is-visible"), 1800);
 }
 
-function resetGuessCounter() {
+function openModal(el) {
+  el.style.display = "flex";
+}
+
+function closeModal(el) {
+  el.style.display = "none";
+}
+
+function setupModals() {
+  // Result and confirm modals only close through their own buttons
+  ["help-modal", "stats-modal"].forEach((id) => {
+    const modal = $(id);
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal || e.target.closest("[data-close]")) closeModal(modal);
+    });
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    ["help-modal", "stats-modal"].forEach((id) => closeModal($(id)));
+    if ($("confirm-modal").style.display === "flex") $("confirm-cancel").click();
+  });
+}
+
+function confirmAction({ title, text, ok }) {
+  const modal = $("confirm-modal");
+  $("confirm-title").textContent = title;
+  $("confirm-text").textContent = text;
+  $("confirm-ok").textContent = ok;
+  openModal(modal);
+  $("confirm-cancel").focus();
+  return new Promise((resolve) => {
+    const done = (answer) => {
+      closeModal(modal);
+      $("confirm-ok").removeEventListener("click", yes);
+      $("confirm-cancel").removeEventListener("click", no);
+      resolve(answer);
+    };
+    const yes = () => done(true);
+    const no = () => done(false);
+    $("confirm-ok").addEventListener("click", yes);
+    $("confirm-cancel").addEventListener("click", no);
+  });
+}
+
+// ── Round bookkeeping ──────────────────────────────────────────
+function resetRound() {
   guessCount = 0;
   gameOver = false;
-  updateGuessCounter();
-  const input = document.getElementById("player-input");
-  if (input) input.disabled = false;
+  soloOutcome = null;
+  guessRows = [];
+  guessedIds = new Set();
+  $("guesses-container").innerHTML = "";
+  $("player-input").disabled = false;
+  $("player-input").value = "";
+  clearSuggestions();
+  renderProgress();
+}
+
+function renderProgress() {
+  const pips = $("guess-pips");
+  const text = $("guess-count-text");
+  pips.innerHTML = "";
+  if (vsMode) {
+    text.textContent = gameOver ? "" : "Unlimited guesses";
+    return;
+  }
+  for (let i = 0; i < MAX_GUESSES; i++) {
+    const pip = document.createElement("span");
+    pip.className = "pip";
+    if (i < guessCount) pip.classList.add("is-used");
+    if (soloOutcome === "won" && i === guessCount - 1) pip.classList.add("is-won");
+    pips.appendChild(pip);
+  }
+  pips.setAttribute("aria-label", `${guessCount} of ${MAX_GUESSES} guesses used`);
+  const left = MAX_GUESSES - guessCount;
+  text.textContent = gameOver ? "" : `${left} ${left === 1 ? "guess" : "guesses"} left`;
+  renderGhosts();
+}
+
+// Dim placeholder rows for the guesses still available (solo only)
+function renderGhosts() {
+  const container = $("guesses-container");
+  container.querySelectorAll(".is-ghost").forEach((el) => el.remove());
+  if (vsMode || gameOver) return;
+  const cols = COLUMNS[currentMode].filter((c) => c !== "name");
+  for (let n = guessCount + 1; n <= MAX_GUESSES; n++) {
+    const row = document.createElement("div");
+    row.className = "guess-row is-ghost";
+    row.setAttribute("aria-hidden", "true");
+    const name = document.createElement("div");
+    name.className = "guess-name";
+    name.textContent = `Guess ${n}`;
+    row.appendChild(name);
+    cols.forEach(() => {
+      const tile = document.createElement("div");
+      tile.className = "tile";
+      row.appendChild(tile);
+    });
+    container.appendChild(row);
+  }
+}
+
+// How long the tile reveal (and win bounce) takes before showing the result
+function revealDelay(won) {
+  if (REDUCED_MOTION.matches) return 350;
+  return won ? 1650 : 1100;
 }
 
 // ── Player fetching ────────────────────────────────────────────
@@ -106,7 +246,7 @@ function pickSoloTarget() {
 }
 
 async function fetchPlayers(skipTargetSelect = false) {
-  const loader = document.getElementById("loading-indicator");
+  const loader = $("loading-indicator");
   loader.textContent = "Loading roster…";
   loader.style.display = "block";
   try {
@@ -123,7 +263,7 @@ async function fetchPlayers(skipTargetSelect = false) {
     await loadTargetImages();
   }
   loader.style.display = "none";
-  if (!skipTargetSelect) document.getElementById("player-input").focus();
+  if (!skipTargetSelect && !IS_TOUCH) $("player-input").focus();
 }
 
 // Headshots are proxied through our own origin: cdn.nba.com sends no CORS
@@ -154,10 +294,12 @@ async function loadTargetImages() {
 }
 
 // ── Guess processing ───────────────────────────────────────────
-async function processGuess(guessName) {
-  if (gameOver) return;
-  const guess = players.find((p) => p.name === guessName);
-  if (!guess) return;
+async function processGuess(guess) {
+  if (gameOver || !guess) return;
+  if (guessedIds.has(guess.id)) {
+    toast("Already guessed");
+    return;
+  }
 
   if (vsMode) {
     await processVsGuess(guess);
@@ -165,16 +307,21 @@ async function processGuess(guessName) {
   }
   if (!targetPlayer) return;
 
+  guessedIds.add(guess.id);
   guessCount++;
-  updateGuessCounter();
   const row = compareGuess(guess, targetPlayer, currentMode);
-  renderRow(row, COLUMNS[currentMode]);
+  guessRows.push(row);
+  const rowEl = renderRow(row, guessCount);
 
   if (row.correct || guessCount >= MAX_GUESSES) {
     gameOver = true;
-    document.getElementById("player-input").disabled = true;
-    setTimeout(() => showWinModal(!row.correct), 500);
+    soloOutcome = row.correct ? "won" : "lost";
+    if (row.correct) rowEl.classList.add("is-win");
+    $("player-input").disabled = true;
+    recordGame(currentMode, row.correct, guessCount);
+    setTimeout(showResult, revealDelay(row.correct));
   }
+  renderProgress();
 }
 
 // Versus guesses are scored by the server, which alone knows the target.
@@ -192,125 +339,264 @@ async function processVsGuess(guess) {
     const data = await res.json();
     if (gameOver) return; // round ended while the request was in flight
 
-    renderRow(data.row, COLUMNS[currentMode]);
+    guessedIds.add(guess.id);
+    guessRows.push(data.row);
+    const rowEl = renderRow(data.row, guessRows.length);
+    if (data.row.correct) rowEl.classList.add("is-win");
     await queueVsUpdate(data);
   } catch (err) {
     console.warn("Failed to submit VS guess", err);
+    toast("Couldn't send that guess. Try again.");
   } finally {
     vsGuessInFlight = false;
   }
 }
 
-const CELL_LABELS = {
-  name: "Name",
-  team: "Team",
-  conf: "Conf",
-  div: "Div",
-  pos: "Pos",
-  height: "Ht",
-  age: "Age",
-  number: "#",
-  pts: "PTS",
-  reb: "REB",
-  ast: "AST",
-  stl: "STL",
-  blk: "BLK",
-  fg3m: "3PM",
-};
-
 // ── Render ─────────────────────────────────────────────────────
-function renderRow(row, cols) {
-  const container = document.getElementById("guesses-container");
+function renderRow(row, number) {
+  const container = $("guesses-container");
   const rowEl = document.createElement("div");
   rowEl.className = "guess-row";
 
-  cols.forEach((c) => {
-    const cell = c === "name" ? null : row.cells[c];
-    const div = document.createElement("div");
-    div.className = ("cell " + (c === "name" ? "name-cell" : cell.status || "")).trim();
-    if (c !== "name") div.dataset.label = CELL_LABELS[c] || c;
-    const inner = document.createElement("div");
-    inner.className = "inner";
-    inner.textContent = c === "name" ? row.name : cell.val + (cell.arrow || "");
-    div.appendChild(inner);
-    rowEl.appendChild(div);
-  });
+  const name = document.createElement("div");
+  name.className = "guess-name";
+  const num = document.createElement("span");
+  num.className = "guess-num";
+  num.textContent = String(number);
+  const text = document.createElement("span");
+  text.textContent = row.name;
+  name.append(num, text);
+  rowEl.appendChild(name);
 
-  container.insertBefore(rowEl, container.firstChild);
-}
-
-// ── Win / result modal ─────────────────────────────────────────
-function showWinModal(gaveUp) {
-  const titleEl = document.getElementById("win-title");
-  const subtitleEl = document.getElementById("win-subtitle");
-  const playAgainBtn = document.getElementById("play-again-btn");
-  const rematchBtn = document.getElementById("vs-rematch-btn");
+  COLUMNS[currentMode]
+    .filter((c) => c !== "name")
+    .forEach((c, i) => rowEl.appendChild(renderTile(c, row.cells[c], i)));
 
   if (vsMode) {
-    if (vsForfeitedBy === vsRole) {
-      titleEl.textContent = "You Gave Up!";
-      titleEl.style.color = "#c0392b";
-      if (subtitleEl) {
-        subtitleEl.textContent = "Your opponent wins this round.";
-        subtitleEl.style.display = "";
-      }
-    } else if (vsForfeitedBy) {
-      titleEl.textContent = "Opponent Gave Up!";
-      titleEl.style.color = "#27ae60";
-      if (subtitleEl) {
-        subtitleEl.textContent = "You win this round.";
-        subtitleEl.style.display = "";
-      }
-    } else {
-      const weWon = vsWinner === vsRole;
-      titleEl.textContent = weWon ? "You Won!" : "Opponent Got It!";
-      titleEl.style.color = weWon ? "#27ae60" : "#c0392b";
-      if (subtitleEl) {
-        subtitleEl.textContent = weWon
-          ? `You guessed it in ${guessCount} ${guessCount === 1 ? "guess" : "guesses"}!`
-          : "Better luck next time.";
-        subtitleEl.style.display = "";
-      }
+    container.insertBefore(rowEl, container.firstChild); // unlimited guesses: newest first
+  } else {
+    const firstGhost = container.querySelector(".is-ghost");
+    container.insertBefore(rowEl, firstGhost);
+  }
+  return rowEl;
+}
+
+function renderTile(col, cell, index) {
+  const status = cell?.status || "nomatch";
+  const tile = document.createElement("div");
+  tile.className = `tile ${status}` + (col === "team" ? " tile--team" : "");
+  tile.style.setProperty("--i", index);
+
+  const arrow = (cell?.arrow || "").trim();
+  const label = CELL_LABELS[col] || col;
+  const direction = arrow === "▲" ? ", answer is higher" : arrow === "▼" ? ", answer is lower" : "";
+  tile.setAttribute("aria-label", `${label} ${cell?.val ?? "—"}, ${STATUS_TEXT[status]}${direction}`);
+
+  const labelEl = document.createElement("span");
+  labelEl.className = "tile-label";
+  labelEl.textContent = label;
+  labelEl.setAttribute("aria-hidden", "true");
+
+  const value = document.createElement("span");
+  value.className = "tile-value";
+  value.setAttribute("aria-hidden", "true");
+  if (col === "team") {
+    const logo = teamLogoUrl(cell?.val);
+    if (logo) {
+      const img = document.createElement("img");
+      img.className = "tile-logo";
+      img.alt = "";
+      img.onerror = () => img.remove();
+      img.src = logo;
+      value.appendChild(img);
     }
-    // Host gets "Play Again"; challenger sees lobby button only
-    // (challenger's game will auto-start when host triggers rematch)
+  }
+  value.append(String(cell?.val ?? "—"));
+  if (arrow) {
+    const arrowEl = document.createElement("span");
+    arrowEl.className = "tile-arrow";
+    arrowEl.textContent = arrow;
+    value.appendChild(arrowEl);
+  }
+
+  tile.append(labelEl, value);
+  return tile;
+}
+
+// ── Result modal ───────────────────────────────────────────────
+function showResult() {
+  const title = $("win-title");
+  const kicker = $("win-kicker");
+  const sub = $("win-subtitle");
+  const shareBtn = $("share-btn");
+  const playAgainBtn = $("play-again-btn");
+  const rematchBtn = $("vs-rematch-btn");
+  let won = false;
+
+  if (vsMode) {
+    kicker.textContent = `Versus · Round ${vsRound}`;
+    if (vsForfeitedBy === vsRole) {
+      title.textContent = "You gave up";
+      sub.textContent = "Your opponent wins this round.";
+    } else if (vsForfeitedBy) {
+      won = true;
+      title.textContent = "Opponent gave up";
+      sub.textContent = "You win this round.";
+    } else {
+      won = vsWinner === vsRole;
+      title.textContent = won ? "You won!" : "Opponent got it";
+      sub.textContent = won
+        ? `Solved in ${guessCount} ${guessCount === 1 ? "guess" : "guesses"}.`
+        : `They beat you to it. You'd made ${guessCount} ${guessCount === 1 ? "guess" : "guesses"}.`;
+    }
+    // Host starts the rematch; the challenger's game restarts automatically
     rematchBtn.style.display = vsRole === "host" ? "" : "none";
     rematchBtn.disabled = false;
     rematchBtn.textContent = "Play Again";
-    playAgainBtn.textContent = "Back to Lobby";
+    playAgainBtn.textContent = "Leave";
+    playAgainBtn.className = "btn btn--ghost";
+    if (vsRole !== "host") sub.textContent += " A new round starts when the host taps Play Again.";
+    shareBtn.style.display = "none";
+    $("result-stats").innerHTML = "";
   } else {
-    titleEl.textContent = gaveUp ? "The Player Was" : "You Got It!";
-    titleEl.style.color = gaveUp ? "#c0392b" : "#27ae60";
-    if (subtitleEl) subtitleEl.style.display = "none";
+    won = soloOutcome === "won";
+    kicker.textContent =
+      soloOutcome === "won"
+        ? `Solved in ${guessCount}/${MAX_GUESSES}`
+        : soloOutcome === "gaveup"
+          ? "You gave up"
+          : "Out of guesses";
+    title.textContent = won ? "You got it!" : "The player was";
+    sub.textContent = "";
     rematchBtn.style.display = "none";
     playAgainBtn.textContent = "New Game";
+    playAgainBtn.className = "btn btn--primary";
+    shareBtn.style.display = guessRows.length ? "" : "none";
+    renderStatRow($("result-stats"), getStats(currentMode));
   }
+  title.className = "result-title " + (won ? "is-win" : "is-loss");
 
-  document.getElementById("win-name").textContent = targetPlayer
-    ? targetPlayer.name
+  const p = targetPlayer;
+  $("win-name").textContent = p ? p.name : "";
+  $("win-meta").textContent = p
+    ? [p.team, p.pos, p.number != null ? `#${p.number}` : null].filter(Boolean).join(" · ")
     : "";
-
-  const imgEl = document.getElementById("headshot-img");
-  if (targetImages?.headshot) {
-    imgEl.src = targetImages.headshot;
-    imgEl.style.display = "block";
+  const headshot = $("headshot-img");
+  const logo = $("result-team-logo");
+  if (p) {
+    headshot.src = "/api/headshot/" + p.id;
+    headshot.style.display = "";
+    const logoUrl = teamLogoUrl(p.team);
+    logo.onerror = () => (logo.style.display = "none");
+    logo.style.display = logoUrl ? "" : "none";
+    if (logoUrl) logo.src = logoUrl;
   } else {
-    imgEl.style.display = "none";
+    headshot.style.display = "none";
+    logo.style.display = "none";
   }
 
-  document.getElementById("win-modal").style.display = "flex";
+  renderResultGrid();
+  openModal($("win-modal"));
+}
+
+function renderResultGrid() {
+  const grid = $("result-grid");
+  grid.innerHTML = "";
+  const cols = COLUMNS[currentMode].filter((c) => c !== "name");
+  guessRows.forEach((row) => {
+    const line = document.createElement("div");
+    line.className = "result-grid-row";
+    cols.forEach((c) => {
+      const cell = document.createElement("span");
+      cell.className = "result-grid-cell " + (row.cells[c]?.status || "nomatch");
+      line.appendChild(cell);
+    });
+    grid.appendChild(line);
+  });
+}
+
+function renderStatRow(el, s) {
+  el.innerHTML = "";
+  [
+    [s.played, "Played"],
+    [winRate(s), "Win %"],
+    [s.streak, "Streak"],
+    [s.best, "Best"],
+  ].forEach(([value, label]) => {
+    const stat = document.createElement("div");
+    stat.className = "stat";
+    const v = document.createElement("span");
+    v.className = "stat-value";
+    v.textContent = String(value);
+    const l = document.createElement("span");
+    l.className = "stat-label";
+    l.textContent = label;
+    stat.append(v, l);
+    el.appendChild(stat);
+  });
+}
+
+function setupShare() {
+  $("share-btn").addEventListener("click", async () => {
+    const text = shareText({
+      mode: currentMode,
+      rows: guessRows,
+      cols: COLUMNS[currentMode],
+      won: soloOutcome === "won",
+      guesses: guessCount,
+      max: MAX_GUESSES,
+      url: location.origin,
+    });
+    const result = await shareResult(text);
+    if (result === "copied") toast("Result copied");
+    else if (result === "failed") toast("Couldn't copy. Try again.");
+  });
+}
+
+// ── Stats modal ────────────────────────────────────────────────
+function renderStatsModal(mode) {
+  document.querySelectorAll("[data-stats-mode]").forEach((b) => {
+    const active = b.dataset.statsMode === mode;
+    b.classList.toggle("is-active", active);
+    b.setAttribute("aria-selected", String(active));
+  });
+  const s = getStats(mode);
+  renderStatRow($("stats-summary"), s);
+
+  const dist = $("stats-dist");
+  dist.innerHTML = "";
+  const max = Math.max(1, ...s.dist);
+  const highlight =
+    !vsMode && soloOutcome === "won" && mode === currentMode ? guessCount - 1 : -1;
+  s.dist.forEach((count, i) => {
+    const row = document.createElement("div");
+    row.className = "dist-row";
+    const n = document.createElement("span");
+    n.textContent = String(i + 1);
+    const bar = document.createElement("span");
+    bar.className = "dist-bar" + (i === highlight ? " is-highlight" : "");
+    bar.style.width = `${Math.max(8, (count / max) * 100)}%`;
+    bar.textContent = String(count);
+    row.append(n, bar);
+    dist.appendChild(row);
+  });
+}
+
+function setupStatsModal() {
+  $("stats-button").addEventListener("click", () => {
+    renderStatsModal(currentMode);
+    openModal($("stats-modal"));
+  });
+  document.querySelectorAll("[data-stats-mode]").forEach((b) => {
+    b.addEventListener("click", () => renderStatsModal(b.dataset.statsMode));
+  });
 }
 
 // ── Help modal ─────────────────────────────────────────────────
 function setupHelpButton() {
-  const helpBtn = document.getElementById("help-button");
-  const helpModal = document.getElementById("help-modal");
-  const closeBtn = document.getElementById("help-close-btn");
-  helpBtn.addEventListener("click", () => (helpModal.style.display = "flex"));
-  closeBtn.addEventListener("click", () => (helpModal.style.display = "none"));
-  helpModal.addEventListener("click", (e) => {
-    if (e.target === helpModal) helpModal.style.display = "none";
-  });
+  const open = () => openModal($("help-modal"));
+  $("help-button").addEventListener("click", open);
+  $("landing-help-btn").addEventListener("click", open);
 }
 
 // ── Autocomplete ───────────────────────────────────────────────
@@ -318,7 +604,7 @@ function setupHelpButton() {
 // keyboard has no accented letters). Stripping combining marks keeps the
 // character count of Latin names, so indexes line up for highlighting.
 function fold(str) {
-  return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  return str.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 }
 
 function findPlayerByName(text) {
@@ -326,74 +612,170 @@ function findPlayerByName(text) {
   return players.find((p) => fold(p.name) === key);
 }
 
-function setupAutocomplete() {
-  const input = document.getElementById("player-input");
-  const list = document.getElementById("autocomplete-list");
+const MAX_SUGGESTIONS = 8;
+let suggestions = [];  // players currently listed
+let activeIndex = -1;
 
-  input.addEventListener("input", function () {
-    list.innerHTML = "";
-    if (!this.value) return;
-    const val = fold(this.value);
-    players
-      .filter((p) => fold(p.name).includes(val))
-      .forEach((match) => {
-        // Highlight the typed text with DOM nodes (no regex/innerHTML from user input)
-        const div = document.createElement("div");
-        const at = fold(match.name).indexOf(val);
-        const strong = document.createElement("strong");
-        strong.textContent = match.name.slice(at, at + val.length);
-        div.append(match.name.slice(0, at), strong, match.name.slice(at + val.length));
-        div.addEventListener("click", () => {
-          input.value = "";
-          list.innerHTML = "";
-          processGuess(match.name);
-        });
-        list.appendChild(div);
-      });
+function clearSuggestions() {
+  suggestions = [];
+  activeIndex = -1;
+  $("autocomplete-list").innerHTML = "";
+  $("player-input").setAttribute("aria-expanded", "false");
+  $("player-input").removeAttribute("aria-activedescendant");
+}
+
+function setActive(index) {
+  const items = $("autocomplete-list").children;
+  if (activeIndex >= 0 && items[activeIndex]) items[activeIndex].classList.remove("is-active");
+  activeIndex = index;
+  const input = $("player-input");
+  if (index >= 0 && items[index]) {
+    items[index].classList.add("is-active");
+    items[index].scrollIntoView({ block: "nearest" });
+    input.setAttribute("aria-activedescendant", items[index].id);
+  } else {
+    input.removeAttribute("aria-activedescendant");
+  }
+}
+
+function renderSuggestions() {
+  const input = $("player-input");
+  const list = $("autocomplete-list");
+  const val = fold(input.value.trim());
+  list.innerHTML = "";
+  suggestions = [];
+  activeIndex = -1;
+  if (!val) {
+    clearSuggestions();
+    return;
+  }
+
+  // Names where a word starts with the query come first
+  const scored = [];
+  for (const p of players) {
+    const name = fold(p.name);
+    const at = name.indexOf(val);
+    if (at < 0) continue;
+    const wordStart = at === 0 || name[at - 1] === " ";
+    scored.push({ p, at, rank: at === 0 ? 0 : wordStart ? 1 : 2 });
+  }
+  scored.sort((a, b) => a.rank - b.rank || a.p.name.localeCompare(b.p.name));
+
+  scored.slice(0, MAX_SUGGESTIONS).forEach(({ p, at }, i) => {
+    const item = document.createElement("div");
+    item.className = "ac-item";
+    item.id = `ac-${p.id}`;
+    item.setAttribute("role", "option");
+    const guessed = guessedIds.has(p.id);
+    if (guessed) {
+      item.classList.add("is-guessed");
+      item.setAttribute("aria-disabled", "true");
+    }
+
+    const logo = document.createElement("img");
+    logo.className = "ac-logo";
+    logo.alt = "";
+    logo.loading = "lazy";
+    logo.onerror = () => (logo.style.visibility = "hidden");
+    logo.src = teamLogoUrl(p.team);
+
+    // Highlight the typed text with DOM nodes (no regex/innerHTML from user input)
+    const name = document.createElement("span");
+    name.className = "ac-name";
+    const strong = document.createElement("strong");
+    strong.textContent = p.name.slice(at, at + val.length);
+    name.append(p.name.slice(0, at), strong, p.name.slice(at + val.length));
+
+    const team = document.createElement("span");
+    team.className = "ac-team";
+    team.textContent = p.team;
+
+    item.append(logo, name, team);
+    // mousedown keeps focus in the input (click would blur it first)
+    item.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      choosePlayer(p);
+    });
+    list.appendChild(item);
+    suggestions.push(p);
+    if (activeIndex < 0 && !guessed) activeIndex = i;
+  });
+
+  input.setAttribute("aria-expanded", suggestions.length ? "true" : "false");
+  setActive(activeIndex);
+}
+
+function choosePlayer(p) {
+  if (!p || gameOver) return;
+  if (guessedIds.has(p.id)) {
+    toast("Already guessed");
+    return;
+  }
+  $("player-input").value = "";
+  clearSuggestions();
+  processGuess(p);
+}
+
+// Enter (keyboard or on-screen): the highlighted suggestion, else an exact name
+function submitCurrent() {
+  const p = activeIndex >= 0 ? suggestions[activeIndex] : findPlayerByName($("player-input").value);
+  if (p) choosePlayer(p);
+}
+
+function setupAutocomplete() {
+  const input = $("player-input");
+
+  input.addEventListener("input", renderSuggestions);
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      if (!suggestions.length) return;
+      e.preventDefault();
+      const step = e.key === "ArrowDown" ? 1 : -1;
+      setActive((activeIndex + step + suggestions.length) % suggestions.length);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      submitCurrent();
+    } else if (e.key === "Escape") {
+      clearSuggestions();
+    }
   });
 
   document.addEventListener("click", (e) => {
-    if (e.target !== input) list.innerHTML = "";
-  });
-
-  input.addEventListener("keydown", function (e) {
-    if (e.key === "Enter") {
-      const match = findPlayerByName(this.value);
-      if (match) {
-        processGuess(match.name);
-        this.value = "";
-        list.innerHTML = "";
-      }
-    }
+    if (!e.target.closest(".input-container")) clearSuggestions();
   });
 }
 
 // ── Hint button ────────────────────────────────────────────────
+function setHintLabel(text) {
+  $("hint-button").querySelector("span").textContent = text;
+}
+
 function setupHintButton() {
-  const btn = document.getElementById("hint-button");
-  const placeholder = document.getElementById("silhouette-placeholder");
-  const silhouetteImg = document.getElementById("silhouette-img");
-  const teamLogoImg = document.getElementById("team-logo-img");
+  const btn = $("hint-button");
+  const panel = document.querySelector(".hint-panel");
+  const placeholder = $("silhouette-placeholder");
+  const silhouetteImg = $("silhouette-img");
+  const teamLogoImg = $("team-logo-img");
 
   btn.addEventListener("click", async () => {
     if (!targetPlayer && !vsMode) return;
     if (!targetImages) await loadTargetImages();
     if (currentMode === "stats") {
-      if (targetImages?.logo) {
-        teamLogoImg.src = targetImages.logo;
-        teamLogoImg.style.display = "block";
-        placeholder.style.display = "none";
-        silhouetteImg.style.display = "none";
-      }
+      if (!targetImages?.logo) return;
+      teamLogoImg.src = targetImages.logo;
+      teamLogoImg.style.display = "block";
+      silhouetteImg.style.display = "none";
     } else if (targetImages?.headshot && (await generateSilhouette(targetImages.headshot))) {
       silhouetteImg.style.display = "block";
       teamLogoImg.style.display = "none";
-      placeholder.style.display = "none";
     } else {
       return; // leave the button enabled so the hint can be retried
     }
+    placeholder.style.display = "none";
+    panel.classList.add("is-revealed");
     btn.disabled = true;
-    btn.textContent = "Hint Shown";
+    setHintLabel("Hint shown");
   });
 }
 
@@ -402,8 +784,8 @@ function setupHintButton() {
 async function generateSilhouette(url) {
   const img = new Image();
   img.src = url;
-  const sil = document.getElementById("silhouette-img");
-  const canvas = document.getElementById("silhouette-canvas");
+  const sil = $("silhouette-img");
+  const canvas = $("silhouette-canvas");
   const ctx = canvas.getContext("2d");
   return new Promise((res) => {
     img.onload = () => {
@@ -427,63 +809,66 @@ async function generateSilhouette(url) {
 
 // ── Reset helpers ──────────────────────────────────────────────
 function resetHintVisuals() {
-  const sil = document.getElementById("silhouette-img");
-  const logo = document.getElementById("team-logo-img");
-  const ph = document.getElementById("silhouette-placeholder");
-  const btn = document.getElementById("hint-button");
-  if (sil) { sil.style.display = "none"; sil.src = ""; }
-  if (logo) { logo.style.display = "none"; logo.src = ""; }
-  if (ph) ph.style.display = "flex";
-  if (btn) { btn.disabled = false; btn.textContent = "Show Hint"; }
+  const sil = $("silhouette-img");
+  const logo = $("team-logo-img");
+  sil.style.display = "none";
+  sil.removeAttribute("src");
+  logo.style.display = "none";
+  logo.removeAttribute("src");
+  $("silhouette-placeholder").style.display = "flex";
+  document.querySelector(".hint-panel").classList.remove("is-revealed");
+  $("hint-button").disabled = false;
+  setHintLabel("Show hint");
+}
+
+function setBoardMode() {
+  $("game-mode-label").textContent = currentMode === "classic" ? "Classic" : "Stats";
+  $("classic-header").style.display = currentMode === "classic" ? "" : "none";
+  $("stats-header").style.display = currentMode === "stats" ? "" : "none";
 }
 
 // ── VS UI helpers ──────────────────────────────────────────────
 function enterVsGameUi() {
-  document.getElementById("vs-status-bar").style.display = "";
-  document.getElementById("guess-max-part").style.display = "none";
+  $("vs-status-bar").style.display = "";
   document.querySelector(".starter-filter").style.display = "none";
+  $("stats-button").style.display = "none";
+  $("give-up-button").querySelector("span").textContent = "Forfeit";
   // Counts and PIN are read from the live state variables at call time
-  document.getElementById("vs-your-guesses").textContent = guessCount;
-  document.getElementById("vs-opponent-guesses").textContent = vsOpponentGuessCount;
-  document.getElementById("vs-game-pin").textContent = vsPin || "------";
+  $("vs-your-guesses").textContent = guessCount;
+  $("vs-opponent-guesses").textContent = vsOpponentGuessCount;
+  $("vs-game-pin").textContent = vsPin || "------";
 }
 
 function exitVsGameUi() {
-  document.getElementById("vs-status-bar").style.display = "none";
-  document.getElementById("give-up-button").style.display = "";
-  document.getElementById("guess-max-part").style.display = "";
+  $("vs-status-bar").style.display = "none";
   document.querySelector(".starter-filter").style.display = "";
+  $("stats-button").style.display = "";
+  $("give-up-button").querySelector("span").textContent = "Give up";
 }
 
 // ── OSK helpers ────────────────────────────────────────────────
 function showOsk() {
   if (!IS_TOUCH) return;
-  document.getElementById("onscreen-keyboard").classList.add("osk--visible");
+  $("onscreen-keyboard").classList.add("osk--visible");
   document.body.classList.add("osk-open");
 }
 
 function hideOsk() {
-  document.getElementById("onscreen-keyboard").classList.remove("osk--visible");
+  $("onscreen-keyboard").classList.remove("osk--visible");
   document.body.classList.remove("osk-open");
 }
 
 // ── Landing screen ─────────────────────────────────────────────
 function setupLanding() {
-  document.getElementById("solo-btn").addEventListener("click", () => {
-    showScreen("start-screen");
-  });
-  document.getElementById("versus-btn").addEventListener("click", () => {
-    showScreen("versus-lobby-screen");
-  });
+  $("solo-btn").addEventListener("click", () => showScreen("start-screen"));
+  $("versus-btn").addEventListener("click", () => showScreen("versus-lobby-screen"));
 }
 
 // ── Solo mode select ───────────────────────────────────────────
 function setupSoloModeSelect() {
-  document.getElementById("solo-back-btn").addEventListener("click", () => {
-    showScreen("landing-screen");
-  });
+  $("solo-back-btn").addEventListener("click", () => showScreen("landing-screen"));
 
-  document.querySelectorAll("#start-screen .mode-btn[data-mode]").forEach((btn) => {
+  document.querySelectorAll("#start-screen .mode-card[data-mode]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       currentMode = btn.dataset.mode;
       await startSoloGame();
@@ -494,17 +879,9 @@ function setupSoloModeSelect() {
 async function startSoloGame() {
   vsMode = false;
   exitVsGameUi();
-
-  const classicHeader = document.getElementById("classic-header");
-  const statsHeader = document.getElementById("stats-header");
-  document.getElementById("game-mode-label").textContent =
-    currentMode === "classic" ? "Classic" : "Stats";
-  classicHeader.style.display = currentMode === "classic" ? "flex" : "none";
-  statsHeader.style.display = currentMode === "stats" ? "flex" : "none";
-
+  setBoardMode();
   resetHintVisuals();
-  resetGuessCounter();
-  document.getElementById("guesses-container").innerHTML = "";
+  resetRound();
 
   showScreen("game-screen");
   await fetchPlayers();
@@ -513,50 +890,50 @@ async function startSoloGame() {
 
 // ── Versus lobby ───────────────────────────────────────────────
 function setupVersusLobby() {
-  document.getElementById("versus-back-btn").addEventListener("click", () => {
-    showScreen("landing-screen");
-  });
+  $("versus-back-btn").addEventListener("click", () => showScreen("landing-screen"));
 
-  document.getElementById("create-game-btn").addEventListener("click", () => {
-    document.getElementById("vs-mode-select-step").style.display = "";
-    document.getElementById("vs-waiting-step").style.display = "none";
+  $("create-game-btn").addEventListener("click", () => {
+    $("vs-mode-select-step").style.display = "";
+    $("vs-waiting-step").style.display = "none";
     showScreen("versus-create-screen");
   });
 
-  document.getElementById("join-game-btn").addEventListener("click", () => {
-    document.getElementById("pin-input").value = "";
-    document.getElementById("join-error").style.display = "none";
-    document.getElementById("join-game-submit-btn").disabled = false;
-    document.getElementById("join-game-submit-btn").textContent = "Join Game";
+  $("join-game-btn").addEventListener("click", () => {
+    $("pin-input").value = "";
+    $("join-error").style.display = "none";
+    $("join-game-submit-btn").disabled = false;
+    $("join-game-submit-btn").textContent = "Join Game";
     showScreen("versus-join-screen");
+    if (!IS_TOUCH) $("pin-input").focus();
   });
 }
 
 // ── Versus create ──────────────────────────────────────────────
-function setupVersusCreate() {
-  document.getElementById("vs-create-back-btn").addEventListener("click", () => {
-    showScreen("versus-lobby-screen");
-  });
+function setCopyLabel(text) {
+  $("copy-pin-btn").querySelector("span").textContent = text;
+}
 
-  document.getElementById("cancel-vs-btn").addEventListener("click", () => {
+function setupVersusCreate() {
+  $("vs-create-back-btn").addEventListener("click", () => showScreen("versus-lobby-screen"));
+
+  $("cancel-vs-btn").addEventListener("click", () => {
     stopVsSync();
     vsPin = null;
     showScreen("versus-lobby-screen");
   });
 
-  document.getElementById("copy-pin-btn").addEventListener("click", () => {
-    const pin = document.getElementById("vs-pin-display").textContent;
+  $("copy-pin-btn").addEventListener("click", () => {
+    const pin = $("vs-pin-display").textContent;
     navigator.clipboard.writeText(pin).catch(() => {});
-    const btn = document.getElementById("copy-pin-btn");
-    btn.textContent = "Copied!";
-    setTimeout(() => (btn.textContent = "Copy PIN"), 2000);
+    setCopyLabel("Copied!");
+    setTimeout(() => setCopyLabel("Copy PIN"), 2000);
   });
 
-  document.getElementById("vs-starter-toggle").addEventListener("change", (e) => {
+  $("vs-starter-toggle").addEventListener("change", (e) => {
     vsStartersOnly = e.target.checked;
   });
 
-  document.querySelectorAll(".mode-btn[data-vs-mode]").forEach((btn) => {
+  document.querySelectorAll(".mode-card[data-vs-mode]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       await createVsGame(btn.dataset.vsMode);
     });
@@ -574,15 +951,18 @@ async function postVs(action, payload) {
   return data;
 }
 
+function showWaitingStep(status) {
+  $("vs-mode-select-step").style.display = "none";
+  $("vs-waiting-step").style.display = "";
+  $("vs-pin-display").textContent = vsPin || "------";
+  $("vs-waiting-status").textContent = status;
+  setCopyLabel("Copy PIN");
+}
+
 async function createVsGame(mode) {
   currentMode = mode;
-
-  // Switch to waiting step
-  document.getElementById("vs-mode-select-step").style.display = "none";
-  document.getElementById("vs-waiting-step").style.display = "";
-  document.getElementById("vs-pin-display").textContent = "------";
-  document.getElementById("vs-waiting-status").textContent = "Creating game…";
-  document.getElementById("copy-pin-btn").textContent = "Copy PIN";
+  vsPin = null;
+  showWaitingStep("Creating game…");
 
   try {
     const data = await postVs("create", { mode, starters_only: vsStartersOnly });
@@ -594,42 +974,28 @@ async function createVsGame(mode) {
     targetPlayer = null;
     targetImages = null;
 
-    document.getElementById("vs-pin-display").textContent = data.pin;
-    document.getElementById("vs-waiting-status").textContent =
-      "Waiting for opponent…";
-
-    // Poll until challenger joins, then launch game
+    showWaitingStep("Waiting for opponent…");
+    // Live updates tell us when the challenger joins
     startVsSync();
   } catch (err) {
     console.error("Failed to create VS game", err);
-    document.getElementById("vs-waiting-status").textContent =
-      "Error creating game. Tap Cancel and try again.";
+    $("vs-waiting-status").textContent = "Error creating game. Tap × and try again.";
   }
 }
 
 // ── Versus join ────────────────────────────────────────────────
 function setupVersusJoin() {
-  document.getElementById("vs-join-back-btn").addEventListener("click", () => {
-    showScreen("versus-lobby-screen");
+  $("vs-join-back-btn").addEventListener("click", () => showScreen("versus-lobby-screen"));
+  $("join-game-submit-btn").addEventListener("click", joinVsGame);
+  $("pin-input").addEventListener("keydown", async (e) => {
+    if (e.key === "Enter") await joinVsGame();
   });
-
-  document
-    .getElementById("join-game-submit-btn")
-    .addEventListener("click", async () => {
-      await joinVsGame();
-    });
-
-  document
-    .getElementById("pin-input")
-    .addEventListener("keydown", async (e) => {
-      if (e.key === "Enter") await joinVsGame();
-    });
 }
 
 async function joinVsGame() {
-  const pin = document.getElementById("pin-input").value.trim().toUpperCase();
-  const errEl = document.getElementById("join-error");
-  const submitBtn = document.getElementById("join-game-submit-btn");
+  const pin = $("pin-input").value.trim().toUpperCase();
+  const errEl = $("join-error");
+  const submitBtn = $("join-game-submit-btn");
 
   if (pin.length !== 6) {
     errEl.textContent = "Please enter a valid PIN.";
@@ -663,11 +1029,7 @@ async function joinVsGame() {
   // Host reconnecting before challenger arrived — back to waiting screen
   if (data.role === "host" && !data.started) {
     vsGameStarted = false;
-    document.getElementById("vs-pin-display").textContent = vsPin;
-    document.getElementById("vs-waiting-status").textContent = "Waiting for opponent…";
-    document.getElementById("copy-pin-btn").textContent = "Copy PIN";
-    document.getElementById("vs-mode-select-step").style.display = "none";
-    document.getElementById("vs-waiting-step").style.display = "";
+    showWaitingStep("Waiting for opponent…");
     showScreen("versus-create-screen");
     startVsSync();
     return;
@@ -685,23 +1047,14 @@ async function startVsGame(state) {
   vsMode = true;
   vsWinner = null;
   vsForfeitedBy = null;
-  gameOver = false;
-  guessCount = 0;
   vsOpponentGuessCount = 0;
   targetPlayer = null;
   targetImages = null;
 
-  const classicHeader = document.getElementById("classic-header");
-  const statsHeader = document.getElementById("stats-header");
-  document.getElementById("game-mode-label").textContent =
-    currentMode === "classic" ? "Classic" : "Stats";
-  classicHeader.style.display = currentMode === "classic" ? "flex" : "none";
-  statsHeader.style.display = currentMode === "stats" ? "flex" : "none";
-
+  setBoardMode();
   resetHintVisuals();
-  document.getElementById("player-input").disabled = false;
-  document.getElementById("guesses-container").innerHTML = "";
-  document.getElementById("win-modal").style.display = "none";
+  resetRound();
+  closeModal($("win-modal"));
 
   showScreen("game-screen");
   enterVsGameUi();
@@ -727,9 +1080,8 @@ async function applyVsState(state) {
   // arrive out of order, so never let an older one move either count backwards.
   guessCount = Math.max(guessCount, mine || 0);
   vsOpponentGuessCount = Math.max(vsOpponentGuessCount, theirs || 0);
-  updateGuessCounter();
-  document.getElementById("vs-your-guesses").textContent = guessCount;
-  document.getElementById("vs-opponent-guesses").textContent = vsOpponentGuessCount;
+  $("vs-your-guesses").textContent = guessCount;
+  $("vs-opponent-guesses").textContent = vsOpponentGuessCount;
 
   if (state.winner && !gameOver) {
     gameOver = true;
@@ -739,8 +1091,10 @@ async function applyVsState(state) {
       targetPlayer = state.target_player;
       targetImages = { headshot: "/api/headshot/" + targetPlayer.id };
     }
-    document.getElementById("player-input").disabled = true;
-    setTimeout(() => showWinModal(false), 300);
+    $("player-input").disabled = true;
+    clearSuggestions();
+    // Let our own winning row finish revealing before the result appears
+    setTimeout(showResult, state.row?.correct ? revealDelay(true) : 300);
   }
 }
 
@@ -864,8 +1218,8 @@ async function handleVsUpdate(data) {
 
 // ── VS rematch (host only) ─────────────────────────────────────
 function setupVsRematch() {
-  document.getElementById("vs-rematch-btn").addEventListener("click", async () => {
-    const btn = document.getElementById("vs-rematch-btn");
+  $("vs-rematch-btn").addEventListener("click", async () => {
+    const btn = $("vs-rematch-btn");
     btn.disabled = true;
     btn.textContent = "Starting…";
 
@@ -896,21 +1250,21 @@ function resetVsState() {
 
 // ── Back button ────────────────────────────────────────────────
 function setupBackButton() {
-  document.getElementById("back-button").addEventListener("click", () => {
-    document.getElementById("guesses-container").innerHTML = "";
-    document.getElementById("win-modal").style.display = "none";
+  $("back-button").addEventListener("click", () => {
+    closeModal($("win-modal"));
     resetHintVisuals();
-    resetGuessCounter();
     hideOsk();
 
     if (vsMode) {
       resetVsState();
       exitVsGameUi();
+      resetRound();
       showScreen("landing-screen");
     } else {
       exitVsGameUi();
+      resetRound();
       showScreen("start-screen");
-      targetPlayer = pickSoloTarget();
+      targetPlayer = null;
       targetImages = null;
     }
   });
@@ -918,70 +1272,87 @@ function setupBackButton() {
 
 // ── Play again ─────────────────────────────────────────────────
 function setupPlayAgain() {
-  document.getElementById("play-again-btn").addEventListener("click", async () => {
-    document.getElementById("win-modal").style.display = "none";
+  $("play-again-btn").addEventListener("click", async () => {
+    closeModal($("win-modal"));
 
     if (vsMode) {
       resetVsState();
       exitVsGameUi();
+      resetRound();
+      hideOsk();
       showScreen("landing-screen");
       return;
     }
 
-    document.getElementById("guesses-container").innerHTML = "";
     resetHintVisuals();
-    resetGuessCounter();
+    resetRound();
     targetPlayer = pickSoloTarget();
     await loadTargetImages();
+    if (!IS_TOUCH) $("player-input").focus();
     showOsk();
   });
 }
 
 // ── Give up ────────────────────────────────────────────────────
 function setupGiveUp() {
-  document.getElementById("give-up-button").addEventListener("click", async () => {
+  $("give-up-button").addEventListener("click", async () => {
     if (gameOver) return;
 
     if (vsMode) {
+      const ok = await confirmAction({
+        title: "Forfeit?",
+        text: "Your opponent wins this round and the player is revealed.",
+        ok: "Forfeit",
+      });
+      if (!ok || gameOver) return;
       // The server reveals the target once the round is decided
       try {
         const state = await postVs("forfeit");
         await queueVsUpdate(state);
       } catch (err) {
         console.warn("Failed to report VS forfeit", err);
+        toast("Couldn't reach the game. Try again.");
       }
       return;
     }
 
     if (!targetPlayer) return;
+    const ok = await confirmAction({
+      title: "Give up?",
+      text: "The player will be revealed and this counts as a loss.",
+      ok: "Give up",
+    });
+    if (!ok || gameOver) return;
     gameOver = true;
-    document.getElementById("player-input").disabled = true;
-    showWinModal(true);
+    soloOutcome = "gaveup";
+    $("player-input").disabled = true;
+    clearSuggestions();
+    recordGame(currentMode, false, guessCount);
+    renderProgress();
+    showResult();
   });
 }
 
 // ── Starter toggle ─────────────────────────────────────────────
 function setupStarterToggle() {
-  document
-    .getElementById("starter-toggle")
-    .addEventListener("change", async (e) => {
-      startersOnly = e.target.checked;
-      document.getElementById("guesses-container").innerHTML = "";
-      resetHintVisuals();
-      resetGuessCounter();
-      await fetchPlayers();
-      if (IS_TOUCH) showOsk();
-    });
+  $("starter-toggle").addEventListener("change", async (e) => {
+    startersOnly = e.target.checked;
+    resetHintVisuals();
+    resetRound();
+    await fetchPlayers();
+    toast(startersOnly ? "Starters only: new player picked" : "All players: new player picked");
+    if (IS_TOUCH) showOsk();
+  });
 }
 
 // ── On-screen keyboard ─────────────────────────────────────────
 function setupOnscreenKeyboard() {
   if (!IS_TOUCH) return;
 
-  const keyboard = document.getElementById("onscreen-keyboard");
-  const input = document.getElementById("player-input");
-  const backspace = document.getElementById("osk-backspace");
-  const enterBtn = document.getElementById("osk-enter");
+  const keyboard = $("onscreen-keyboard");
+  const input = $("player-input");
+  const backspace = $("osk-backspace");
+  const enterBtn = $("osk-enter");
 
   input.removeAttribute("readonly");
   input.setAttribute("inputmode", "none");
@@ -1055,24 +1426,7 @@ function setupOnscreenKeyboard() {
       e.preventDefault();
       flash(enterBtn);
       if (gameOver) return;
-
-      let match = findPlayerByName(input.value);
-
-      if (!match) {
-        const list = document.getElementById("autocomplete-list");
-        if (list.firstChild) {
-          const firstSuggestion = list.firstChild.textContent;
-          match = players.find((p) => p.name === firstSuggestion);
-        }
-      }
-
-      if (match) {
-        processGuess(match.name);
-        input.value = "";
-        document.getElementById("autocomplete-list").innerHTML = "";
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-      }
-
+      submitCurrent();
       input.focus({ preventScroll: true });
     },
     { passive: false },
@@ -1083,6 +1437,7 @@ function setupOnscreenKeyboard() {
 function init() {
   if (typeof lucide !== "undefined") lucide.createIcons();
   vsPlayerId = getOrCreatePlayerId();
+  setupModals();
   setupLanding();
   setupSoloModeSelect();
   setupVersusLobby();
@@ -1096,6 +1451,8 @@ function init() {
   setupHintButton();
   setupStarterToggle();
   setupHelpButton();
+  setupStatsModal();
+  setupShare();
   setupOnscreenKeyboard();
   // Prefetch players in background so autocomplete is ready
   fetchPlayers(true);

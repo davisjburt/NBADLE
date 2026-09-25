@@ -4,7 +4,7 @@ Guess the NBA player. Runs on Cloudflare Workers.
 
 - `public/`: the static site (HTML, CSS, JS) plus `players.json`, served by Workers Static Assets
 - `src/index.js`: the `/api/*` routes (headshot proxy, Versus endpoints)
-- `src/vs-room.js`: the `VsRoom` Durable Object, one per Versus PIN. It holds the target player and scores guesses server-side. Rooms expire after 2 hours.
+- `src/vs-room.js`: the `VsRoom` Durable Object, one per Versus PIN. It holds the target player, scores guesses server-side, and pushes every state change to both players over a WebSocket (`/api/vs/ws/:pin`). Clients fall back to polling while reconnecting. Rooms expire after 2 hours.
 - `public/js/compare.js`: guess-comparison logic, shared by the browser (solo) and the Worker (Versus)
 
 ## Develop

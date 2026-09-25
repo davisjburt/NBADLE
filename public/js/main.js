@@ -19,7 +19,12 @@ let vsPlayerId = null;
 let vsRole = null;         // 'host' | 'challenger'
 let vsWinner = null;       // 'host' | 'challenger' | null
 let vsGameStarted = false;
-let vsPollingInterval = null;
+let vsSocket = null;           // live updates from the room
+let vsSocketRetries = 0;
+let vsReconnectTimer = null;
+let vsPingTimer = null;
+let vsPollingInterval = null;  // fallback while the socket is down
+let vsUpdateChain = Promise.resolve();
 let vsOpponentGuessCount = 0;
 let vsRound = 1;
 let vsForfeitedBy = null;  // role that gave up this round, if any
@@ -188,7 +193,7 @@ async function processVsGuess(guess) {
     if (gameOver) return; // round ended while the request was in flight
 
     renderRow(data.row, COLUMNS[currentMode]);
-    await applyVsState(data);
+    await queueVsUpdate(data);
   } catch (err) {
     console.warn("Failed to submit VS guess", err);
   } finally {
@@ -534,7 +539,7 @@ function setupVersusCreate() {
   });
 
   document.getElementById("cancel-vs-btn").addEventListener("click", () => {
-    stopVsPolling();
+    stopVsSync();
     vsPin = null;
     showScreen("versus-lobby-screen");
   });
@@ -594,7 +599,7 @@ async function createVsGame(mode) {
       "Waiting for opponent…";
 
     // Poll until challenger joins, then launch game
-    startVsPolling();
+    startVsSync();
   } catch (err) {
     console.error("Failed to create VS game", err);
     document.getElementById("vs-waiting-status").textContent =
@@ -664,14 +669,14 @@ async function joinVsGame() {
     document.getElementById("vs-mode-select-step").style.display = "none";
     document.getElementById("vs-waiting-step").style.display = "";
     showScreen("versus-create-screen");
-    startVsPolling();
+    startVsSync();
     return;
   }
 
   // Host reconnecting mid-game, or challenger (new or returning)
   vsGameStarted = true;
   await startVsGame(data);
-  startVsPolling();
+  startVsSync();
 }
 
 // ── VS game launch ─────────────────────────────────────────────
@@ -737,9 +742,68 @@ async function applyVsState(state) {
   }
 }
 
-// ── VS polling ─────────────────────────────────────────────────
-function startVsPolling() {
+// ── VS live updates ────────────────────────────────────────────
+// The room pushes its state over a WebSocket whenever anything changes. If the
+// socket drops, we reconnect with backoff and poll every 3s in the meantime.
+function startVsSync() {
+  stopVsSync();
+  connectVsSocket();
+}
+
+function stopVsSync() {
+  clearTimeout(vsReconnectTimer);
+  vsReconnectTimer = null;
+  clearInterval(vsPingTimer);
+  vsPingTimer = null;
   stopVsPolling();
+  if (vsSocket) {
+    const ws = vsSocket;
+    vsSocket = null; // mark as intentional so onclose doesn't reconnect
+    ws.close(1000);
+  }
+}
+
+function connectVsSocket() {
+  if (!vsPin) return;
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  const ws = new WebSocket(
+    `${proto}//${location.host}/api/vs/ws/${vsPin}?player_id=${encodeURIComponent(vsPlayerId)}`,
+  );
+  vsSocket = ws;
+
+  ws.addEventListener("open", () => {
+    vsSocketRetries = 0;
+    stopVsPolling();
+    clearInterval(vsPingTimer);
+    vsPingTimer = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) ws.send("ping");
+    }, 25000);
+  });
+
+  ws.addEventListener("message", (e) => {
+    if (e.data === "pong") return;
+    let data;
+    try {
+      data = JSON.parse(e.data);
+    } catch {
+      return;
+    }
+    if (data.type === "state") queueVsUpdate(data);
+  });
+
+  ws.addEventListener("close", (e) => {
+    if (vsSocket !== ws) return; // replaced or closed on purpose
+    vsSocket = null;
+    clearInterval(vsPingTimer);
+    if (!vsPin || e.code === 4404) return; // room expired
+    startVsPolling();
+    const delay = Math.min(30000, 1000 * 2 ** vsSocketRetries++);
+    vsReconnectTimer = setTimeout(connectVsSocket, delay);
+  });
+}
+
+function startVsPolling() {
+  if (vsPollingInterval) return;
   vsPollingInterval = setInterval(pollVsStatus, 3000);
 }
 
@@ -752,33 +816,48 @@ function stopVsPolling() {
 
 async function pollVsStatus() {
   if (!vsPin) return;
-
   try {
     const res = await fetch(`/api/vs/status/${vsPin}`);
-    if (!res.ok) return;
-    const data = await res.json();
-
-    // Phase 1 — host waiting for challenger to join
-    if (vsRole === "host" && !vsGameStarted) {
-      if (data.started) {
-        vsGameStarted = true;
-        await startVsGame(data);
-      }
+    if (res.status === 404) {
+      stopVsSync(); // room is gone; stop reconnecting
       return;
     }
+    if (!res.ok) return;
+    queueVsUpdate(await res.json());
+  } catch (_) {
+    // Ignore network errors; the next poll or reconnect will catch up
+  }
+}
 
-    // Phase 3 — rematch: server round advanced (challenger detects host's Play Again)
-    if (data.round > vsRound) {
+// Updates can arrive from the socket, a poll, or our own requests; apply them
+// one at a time so a slow startVsGame can't interleave with the next update.
+function queueVsUpdate(data) {
+  vsUpdateChain = vsUpdateChain.then(() => handleVsUpdate(data)).catch(() => {});
+  return vsUpdateChain;
+}
+
+async function handleVsUpdate(data) {
+  if (!vsPin || data.pin !== vsPin) return;
+
+  // Phase 1 — host waiting for challenger to join
+  if (vsRole === "host" && !vsGameStarted) {
+    if (data.started) {
+      vsGameStarted = true;
       vsRound = data.round;
       await startVsGame(data);
-      return;
     }
-
-    // Phase 2 — in-game: sync counts and detect the opponent winning or forfeiting
-    await applyVsState(data);
-  } catch (_) {
-    // Ignore network errors during polling
+    return;
   }
+
+  // Phase 3 — rematch: server round advanced (challenger detects host's Play Again)
+  if (data.round > vsRound) {
+    vsRound = data.round;
+    await startVsGame(data);
+    return;
+  }
+
+  // Phase 2 — in-game: sync counts and detect the opponent winning or forfeiting
+  if (data.round === vsRound) await applyVsState(data);
 }
 
 // ── VS rematch (host only) ─────────────────────────────────────
@@ -789,10 +868,8 @@ function setupVsRematch() {
     btn.textContent = "Starting…";
 
     try {
-      const data = await postVs("rematch");
-      vsRound = data.round;
-      await startVsGame(data);
-      // Polling already running — challenger will detect the new round automatically
+      // The same state also arrives over the socket; the queue applies it once
+      await queueVsUpdate(await postVs("rematch"));
     } catch (_) {
       btn.disabled = false;
       btn.textContent = "Play Again";
@@ -802,7 +879,7 @@ function setupVsRematch() {
 
 // ── VS state reset ─────────────────────────────────────────────
 function resetVsState() {
-  stopVsPolling();
+  stopVsSync();
   vsMode = false;
   vsPin = null;
   vsRole = null;
@@ -867,7 +944,7 @@ function setupGiveUp() {
       // The server reveals the target once the round is decided
       try {
         const state = await postVs("forfeit");
-        await applyVsState(state);
+        await queueVsUpdate(state);
       } catch (err) {
         console.warn("Failed to report VS forfeit", err);
       }

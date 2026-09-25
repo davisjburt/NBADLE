@@ -1,6 +1,10 @@
 // src/vs-room.js
 // One Durable Object per Versus room. The target player lives only here and is
 // never sent to clients until the round has a winner.
+//
+// Players make moves over plain HTTP (via the Worker) and each hold a WebSocket
+// to the room; every state change is pushed to both sockets. Sockets use the
+// hibernation API, so an idle room costs nothing while its connections stay open.
 
 import { DurableObject } from "cloudflare:workers";
 import { compareGuess } from "../public/js/compare.js";
@@ -11,6 +15,12 @@ const ok = (body) => ({ status: 200, body });
 const err = (status, error) => ({ status, body: { error } });
 
 export class VsRoom extends DurableObject {
+  constructor(ctx, env) {
+    super(ctx, env);
+    // Keepalive pings are answered without waking the object
+    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
+  }
+
   async #load() {
     return (await this.ctx.storage.get("room")) || null;
   }
@@ -40,6 +50,45 @@ export class VsRoom extends DurableObject {
       challenger_guess_count: room.challenger_guess_count,
       target_player: room.winner ? room.target : null,
     };
+  }
+
+  #broadcast(room) {
+    const message = JSON.stringify({ type: "state", ...this.#publicState(room) });
+    for (const ws of this.ctx.getWebSockets()) {
+      try {
+        ws.send(message);
+      } catch {
+        // Socket already closing; its client will reconnect and get fresh state
+      }
+    }
+  }
+
+  // WebSocket upgrade, forwarded by the Worker from /api/vs/ws/:pin?player_id=
+  async fetch(request) {
+    if (request.headers.get("Upgrade") !== "websocket") {
+      return new Response("Expected WebSocket", { status: 426 });
+    }
+    const room = await this.#load();
+    if (!room) return new Response("Room not found", { status: 404 });
+    const role = this.#roleOf(room, new URL(request.url).searchParams.get("player_id"));
+    if (!role) return new Response("Not in this room", { status: 403 });
+
+    const { 0: client, 1: server } = new WebSocketPair();
+    this.ctx.acceptWebSocket(server, [role]);
+    server.send(JSON.stringify({ type: "state", ...this.#publicState(room) }));
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  async webSocketMessage() {
+    // Clients only send keepalive pings, which the auto-response handles
+  }
+
+  async webSocketClose(ws, code, reason) {
+    try {
+      ws.close(code, reason);
+    } catch {
+      // Already closed
+    }
   }
 
   // Returns null if a room already exists under this PIN, so the caller can retry.
@@ -77,6 +126,7 @@ export class VsRoom extends DurableObject {
       room.started = true;
       role = "challenger";
       await this.#save(room);
+      this.#broadcast(room); // tells a waiting host the game has started
     }
     return ok({ ...this.#publicState(room), role });
   }
@@ -100,6 +150,7 @@ export class VsRoom extends DurableObject {
       room[`${role}_guess_count`] += 1;
       if (row.correct) room.winner = role;
       await this.#save(room);
+      this.#broadcast(room);
     }
     return ok({ row, ...this.#publicState(room) });
   }
@@ -126,6 +177,7 @@ export class VsRoom extends DurableObject {
     });
     await this.#save(room);
     await this.ctx.storage.setAlarm(Date.now() + ROOM_TTL_MS);
+    this.#broadcast(room);
     return ok(this.#publicState(room));
   }
 
@@ -139,11 +191,19 @@ export class VsRoom extends DurableObject {
       room.winner = role === "host" ? "challenger" : "host";
       room.forfeited_by = role;
       await this.#save(room);
+      this.#broadcast(room);
     }
     return ok(this.#publicState(room));
   }
 
   async alarm() {
+    for (const ws of this.ctx.getWebSockets()) {
+      try {
+        ws.close(4404, "Room expired");
+      } catch {
+        // Already closed
+      }
+    }
     await this.ctx.storage.deleteAll();
   }
 }

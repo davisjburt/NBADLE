@@ -103,6 +103,13 @@ async function handleVs(request, env, url, parts) {
 
   if (isGet && action === "status") return fromRoom(await room.status());
 
+  if (isGet && action === "ws") {
+    if (request.headers.get("Upgrade") !== "websocket") {
+      return json({ error: "Expected WebSocket" }, 426);
+    }
+    return room.fetch(request);
+  }
+
   if (isGet && action === "headshot") {
     const res = await room.hintTarget(playerId);
     if (res.status !== 200) return fromRoom(res);

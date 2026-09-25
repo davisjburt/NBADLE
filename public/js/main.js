@@ -1,6 +1,6 @@
 // public/js/main.js
 
-import { MAX_GUESSES, COLUMNS, compareGuess, teamLogoUrl } from "./compare.js";
+import { MAX_GUESSES, COLUMNS, canBeTarget, compareGuess, teamLogoUrl } from "./compare.js";
 
 let allPlayers = [];
 let players = [];
@@ -96,6 +96,10 @@ function pickRandom(list) {
   return list.length ? list[Math.floor(Math.random() * list.length)] : null;
 }
 
+function pickSoloTarget() {
+  return pickRandom(players.filter((p) => canBeTarget(p, currentMode)));
+}
+
 async function fetchPlayers(skipTargetSelect = false) {
   const loader = document.getElementById("loading-indicator");
   loader.textContent = "Loading roster…";
@@ -110,7 +114,7 @@ async function fetchPlayers(skipTargetSelect = false) {
   const starters = allPlayers.filter((p) => p.is_starter);
   players = startersOnly && starters.length ? starters : [...allPlayers];
   if (!skipTargetSelect) {
-    targetPlayer = pickRandom(players);
+    targetPlayer = pickSoloTarget();
     await loadTargetImages();
   }
   loader.style.display = "none";
@@ -827,7 +831,7 @@ function setupBackButton() {
     } else {
       exitVsGameUi();
       showScreen("start-screen");
-      targetPlayer = pickRandom(players);
+      targetPlayer = pickSoloTarget();
       targetImages = null;
     }
   });
@@ -848,7 +852,7 @@ function setupPlayAgain() {
     document.getElementById("guesses-container").innerHTML = "";
     resetHintVisuals();
     resetGuessCounter();
-    targetPlayer = pickRandom(players);
+    targetPlayer = pickSoloTarget();
     await loadTargetImages();
     showOsk();
   });

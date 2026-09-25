@@ -19,12 +19,13 @@ export function teamLogoUrl(team) {
   return id ? `https://cdn.nba.com/logos/nba/${id}/global/L/logo.svg` : "";
 }
 
+// Returns total inches, or null when the height is unknown.
 export function parseHeight(h) {
-  if (!h) return 0;
+  if (!h) return null;
   const p = h.split("'");
-  return p.length < 2
-    ? 0
-    : parseInt(p[0]) * 12 + parseInt(p[1].replace('"', ""));
+  if (p.length < 2) return null;
+  const inches = parseInt(p[0]) * 12 + parseInt(p[1].replace('"', ""));
+  return isFinite(inches) ? inches : null;
 }
 
 export function checkMatch(g, t) {
@@ -59,6 +60,13 @@ function statCell(g, t, thresh) {
   };
 }
 
+const STAT_KEYS = ["pts", "reb", "ast", "stl", "blk", "fg3m"];
+
+// Players without season averages yet (e.g. rookies) can't be a Stats-mode target.
+export function canBeTarget(player, mode) {
+  return mode !== "stats" || STAT_KEYS.some((k) => Number(player[k]) > 0);
+}
+
 export const COLUMNS = {
   classic: ["name", "team", "conf", "div", "pos", "height", "age", "number"],
   stats: ["name", "team", "pts", "reb", "ast", "stl", "blk", "fg3m"],
@@ -86,10 +94,10 @@ export function compareGuess(guess, target, mode) {
       div: { val: guess.div, status: checkMatch(guess.div, target.div) },
       pos: { val: guess.pos, status: checkPos(guess.pos, target.pos) },
       height: {
-        val: guess.height,
+        val: guess.height ?? "—",
         ...checkNum(parseHeight(guess.height), parseHeight(target.height), 2),
       },
-      age: { val: guess.age, ...checkNum(guess.age, target.age, 2) },
+      age: { val: guess.age ?? "—", ...checkNum(guess.age, target.age, 2) },
       number: {
         val: guess.number ?? "—",
         ...checkNum(guess.number, target.number, 2),

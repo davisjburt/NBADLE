@@ -25,7 +25,11 @@ To redeploy automatically on every push, connect the repo to the Worker in the C
 
 ## Player data
 
-`public/players.json` comes from `scripts/refresh_players.py`, which uses nba_api. The GitHub Action in `.github/workflows/refresh-players.yml` runs it daily and commits any changes. If stats.nba.com can't be reached, the script leaves the existing file untouched.
+`public/players.json` comes from `scripts/refresh_players.py`. The GitHub Action in `.github/workflows/refresh-players.yml` runs it daily and commits any changes.
+
+- **Rosters** (team, jersey, position, height) come from www.nba.com/players, and **ages** from player pages. Both embed their data as JSON.
+- **Per-game averages** come from stats.nba.com when it responds. It usually blocks automated requests, so otherwise each player keeps the averages already in `players.json`, matched by id. Players without averages (e.g. rookies) are never chosen as a Stats-mode target.
+- If the roster data comes back incomplete, the script leaves the existing file untouched.
 
 Run it locally with:
 

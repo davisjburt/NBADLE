@@ -1,7 +1,7 @@
 // src/index.js
 // Static files in public/ are served by Workers Static Assets; only /api/* runs here.
 
-import { teamLogoUrl } from "../public/js/compare.js";
+import { canBeTarget, teamLogoUrl } from "../public/js/compare.js";
 
 export { VsRoom } from "./vs-room.js";
 
@@ -38,8 +38,8 @@ function loadPlayers(env, url) {
   return playersPromise;
 }
 
-async function pickTarget(env, url, startersOnly) {
-  const players = await loadPlayers(env, url);
+async function pickTarget(env, url, startersOnly, mode) {
+  const players = (await loadPlayers(env, url)).filter((p) => canBeTarget(p, mode));
   const starters = startersOnly ? players.filter((p) => p.is_starter) : [];
   const pool = starters.length ? starters : players;
   return pool[Math.floor(Math.random() * pool.length)];
@@ -76,7 +76,7 @@ async function handleVs(request, env, url, parts) {
 
   if (action === "create" && request.method === "POST") {
     const body = await readBody(request);
-    const target = await pickTarget(env, url, !!body.starters_only);
+    const target = await pickTarget(env, url, !!body.starters_only, body.mode);
     for (let i = 0; i < 5; i++) {
       const pin = generatePin();
       const state = await roomStub(env, pin).create({
@@ -135,7 +135,7 @@ async function handleVs(request, env, url, parts) {
     case "rematch": {
       const status = await room.status();
       if (status.status !== 200) return fromRoom(status);
-      const target = await pickTarget(env, url, status.body.starters_only);
+      const target = await pickTarget(env, url, status.body.starters_only, status.body.mode);
       return fromRoom(await room.rematch(playerId, target));
     }
 

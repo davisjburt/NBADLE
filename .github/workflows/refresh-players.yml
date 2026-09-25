@@ -12,9 +12,9 @@ jobs:
   refresh:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
@@ -22,7 +22,7 @@ jobs:
 
       - run: pip install -r scripts/requirements.txt
 
-      # stats.nba.com often blocks cloud IPs. The script then exits non-zero without
+      # If www.nba.com rosters come back incomplete, the script exits non-zero without
       # touching players.json, so we warn instead of failing the run.
       - name: Fetch players
         id: fetch
@@ -30,7 +30,7 @@ jobs:
         run: python scripts/refresh_players.py
 
       - if: steps.fetch.outcome == 'failure'
-        run: echo "::warning::NBA API unavailable; kept the existing players.json"
+        run: echo "::warning::Roster fetch failed; kept the existing players.json"
 
       - name: Commit if changed
         if: steps.fetch.outcome == 'success'

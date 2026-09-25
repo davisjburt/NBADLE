@@ -9,9 +9,9 @@
     <title>NBADLE</title>
     <link
       rel="stylesheet"
-      href="{{ url_for('static', filename='css/styles.css') }}"
+      href="/css/styles.css"
     />
-    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@1.48.0/dist/umd/lucide.min.js"></script>
   </head>
   <body>
     <div class="container">
@@ -347,9 +347,6 @@
       </div>
     </div>
 
-    <script>
-      const fallbackPlayers = {{ fallback_players | tojson | safe }};
-    </script>
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script type="module" src="/js/main.js"></script>
   </body>
 </html>

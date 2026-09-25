@@ -234,14 +234,12 @@ def main():
         source = "previous players.json"
         print("  Falling back to the averages already in players.json")
 
-    no_stats = 0
+    zero = {k: 0.0 for k in STAT_KEYS}
     for p in players:
-        s = stats.get(p["id"])
-        if s is None:
-            no_stats += 1
-            s = {k: 0.0 for k in STAT_KEYS}
+        s = stats.get(p["id"], zero)
         p.update({k: round(float(s[k]), 1) for k in STAT_KEYS})
         p["is_starter"] = is_starter(p)
+    no_stats = sum(1 for p in players if not any(p[k] for k in STAT_KEYS))
 
     players.sort(key=lambda p: p["name"])
     with open(OUT_FILE, "w") as f:

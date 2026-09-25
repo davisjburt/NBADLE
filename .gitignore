@@ -1,4 +1,21 @@
+# OS / editor
+.DS_Store
+
+# Node / Wrangler
+node_modules/
+.wrangler/
+.dev.vars*
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Local-only scratch files
+/nbadle/
+/workingVersion/
+/static/
+/data_cache.py
 /test_bio_direct.py
 /test_nba_bio.py
-/workingVersion
-/data_cache.py

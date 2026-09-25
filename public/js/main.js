@@ -1,12 +1,11 @@
-// static/js/main.js
+// public/js/main.js
 
-const MAX_GUESSES = 8;
+import { MAX_GUESSES, COLUMNS, compareGuess, teamLogoUrl } from "./compare.js";
 
-let players = Array.isArray(fallbackPlayers) ? [...fallbackPlayers] : [];
-let targetPlayer =
-  players.length > 0
-    ? players[Math.floor(Math.random() * players.length)]
-    : null;
+let allPlayers = [];
+let players = [];
+let playersLoaded = null; // Promise for the one-time /players.json load
+let targetPlayer = null;  // In versus this stays null until the server reveals it
 let targetImages = null;
 let currentMode = "classic";
 let startersOnly = false;
@@ -23,7 +22,8 @@ let vsGameStarted = false;
 let vsPollingInterval = null;
 let vsOpponentGuessCount = 0;
 let vsRound = 1;
-let vsForfeited = false;
+let vsForfeitedBy = null;  // role that gave up this round, if any
+let vsStartersOnly = false;
 
 // Touch detection
 const IS_TOUCH = navigator.maxTouchPoints > 0 || "ontouchstart" in window;
@@ -74,162 +74,122 @@ function resetGuessCounter() {
 }
 
 // ── Player fetching ────────────────────────────────────────────
+function loadAllPlayers() {
+  if (!playersLoaded) {
+    playersLoaded = fetch("/players.json")
+      .then((res) => {
+        if (!res.ok) throw new Error("players.json " + res.status);
+        return res.json();
+      })
+      .then((data) => {
+        allPlayers = Array.isArray(data) ? data : [];
+      })
+      .catch((err) => {
+        playersLoaded = null; // allow a retry on the next call
+        throw err;
+      });
+  }
+  return playersLoaded;
+}
+
+function pickRandom(list) {
+  return list.length ? list[Math.floor(Math.random() * list.length)] : null;
+}
+
 async function fetchPlayers(skipTargetSelect = false) {
   const loader = document.getElementById("loading-indicator");
+  loader.textContent = "Loading roster…";
   loader.style.display = "block";
   try {
-    const q = startersOnly ? "?starters_only=true" : "";
-    const res = await fetch("/api/players" + q);
-    if (!res.ok) throw new Error("Server error");
-    const data = await res.json();
-    if (Array.isArray(data) && data.length > 0) {
-      players = data;
-      if (!skipTargetSelect) {
-        targetPlayer = players[Math.floor(Math.random() * players.length)];
-        targetImages = null;
-        await loadTargetImages();
-      }
-    }
+    await loadAllPlayers();
   } catch (err) {
-    console.warn("Backend unavailable. Using fallback.", err);
-    players = startersOnly
-      ? fallbackPlayers.filter((p) => p.is_starter)
-      : [...fallbackPlayers];
-    if (!skipTargetSelect && players.length > 0)
-      targetPlayer = players[Math.floor(Math.random() * players.length)];
+    console.error("Could not load players", err);
+    loader.textContent = "Couldn't load the roster. Check your connection and reload.";
+    return;
   }
-  if (!skipTargetSelect && targetPlayer && !targetImages) await loadTargetImages();
+  const starters = allPlayers.filter((p) => p.is_starter);
+  players = startersOnly && starters.length ? starters : [...allPlayers];
+  if (!skipTargetSelect) {
+    targetPlayer = pickRandom(players);
+    await loadTargetImages();
+  }
   loader.style.display = "none";
   if (!skipTargetSelect) document.getElementById("player-input").focus();
 }
 
+// Headshots are proxied through our own origin: cdn.nba.com sends no CORS
+// headers, which would otherwise block drawing them on the silhouette canvas.
+// In versus the server hands out the hint without revealing who the target is.
 async function loadTargetImages() {
-  if (!targetPlayer) return;
-  try {
-    const res = await fetch("/api/player_image/" + targetPlayer.id);
-    const json = await res.json();
-    if (!json.headshot) throw new Error("no headshot");
-    targetImages = json;
-  } catch {
-    targetImages = null;
+  targetImages = null;
+  if (vsMode && !targetPlayer) {
+    if (!vsPin) return;
+    try {
+      const res = await fetch("/api/vs/hint", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: vsPin, player_id: vsPlayerId }),
+      });
+      if (res.ok) targetImages = await res.json();
+    } catch {
+      targetImages = null;
+    }
+    return;
   }
-}
-
-// ── Comparison helpers ─────────────────────────────────────────
-function parseHeight(h) {
-  if (!h) return 0;
-  const p = h.split("'");
-  return p.length < 2
-    ? 0
-    : parseInt(p[0]) * 12 + parseInt(p[1].replace('"', ""));
-}
-
-function checkMatch(g, t) {
-  return g === t ? "match" : "nomatch";
-}
-function checkPos(gp, tp) {
-  if (gp === tp) return "match";
-  if (gp.includes(tp) || tp.includes(gp)) return "partial";
-  return "nomatch";
-}
-
-function checkNum(g, t, thresh) {
-  const gv = Number(g ?? 0),
-    tv = Number(t ?? 0);
-  if (!isFinite(gv) || !isFinite(tv)) return { status: "nomatch", arrow: "" };
-  const diff = Math.abs(gv - tv);
-  let status = gv === tv ? "match" : diff <= thresh ? "partial" : "nomatch";
-  let arrow = gv < tv ? " ▲" : gv > tv ? " ▼" : "";
-  return { status, arrow };
+  if (targetPlayer) {
+    targetImages = {
+      headshot: "/api/headshot/" + targetPlayer.id,
+      logo: teamLogoUrl(targetPlayer.team),
+    };
+  }
 }
 
 // ── Guess processing ───────────────────────────────────────────
-function processGuess(guessName) {
+async function processGuess(guessName) {
   if (gameOver) return;
   const guess = players.find((p) => p.name === guessName);
-  if (!guess || !targetPlayer) return;
+  if (!guess) return;
+
+  if (vsMode) {
+    await processVsGuess(guess);
+    return;
+  }
+  if (!targetPlayer) return;
 
   guessCount++;
   updateGuessCounter();
+  const row = compareGuess(guess, targetPlayer, currentMode);
+  renderRow(row, COLUMNS[currentMode]);
 
-  let stats, cols;
-
-  if (currentMode === "classic") {
-    stats = {
-      name: guess.name,
-      team: {
-        val: guess.team,
-        status: checkMatch(guess.team, targetPlayer.team),
-      },
-      conf: {
-        val: guess.conf,
-        status: checkMatch(guess.conf, targetPlayer.conf),
-      },
-      div: { val: guess.div, status: checkMatch(guess.div, targetPlayer.div) },
-      pos: { val: guess.pos, status: checkPos(guess.pos, targetPlayer.pos) },
-      height: {
-        val: guess.height,
-        ...checkNum(
-          parseHeight(guess.height),
-          parseHeight(targetPlayer.height),
-          2,
-        ),
-      },
-      age: { val: guess.age, ...checkNum(guess.age, targetPlayer.age, 2) },
-      number: {
-        val: guess.number,
-        ...checkNum(guess.number, targetPlayer.number, 2),
-      },
-    };
-    cols = ["name", "team", "conf", "div", "pos", "height", "age", "number"];
-  } else {
-    const gPts = Number(guess.pts ?? 0),
-      gReb = Number(guess.reb ?? 0),
-      gAst = Number(guess.ast ?? 0);
-    const gStl = Number(guess.stl ?? 0),
-      gBlk = Number(guess.blk ?? 0),
-      g3m = Number(guess.fg3m ?? 0);
-    const tPts = Number(targetPlayer.pts ?? 0),
-      tReb = Number(targetPlayer.reb ?? 0),
-      tAst = Number(targetPlayer.ast ?? 0);
-    const tStl = Number(targetPlayer.stl ?? 0),
-      tBlk = Number(targetPlayer.blk ?? 0),
-      t3m = Number(targetPlayer.fg3m ?? 0);
-    stats = {
-      name: guess.name,
-      team: {
-        val: guess.team,
-        status: checkMatch(guess.team, targetPlayer.team),
-      },
-      pts: {
-        val: isFinite(gPts) ? gPts.toFixed(1) : "0.0",
-        ...checkNum(gPts, tPts, 1.0),
-      },
-      reb: {
-        val: isFinite(gReb) ? gReb.toFixed(1) : "0.0",
-        ...checkNum(gReb, tReb, 1.0),
-      },
-      ast: {
-        val: isFinite(gAst) ? gAst.toFixed(1) : "0.0",
-        ...checkNum(gAst, tAst, 1.0),
-      },
-      stl: {
-        val: isFinite(gStl) ? gStl.toFixed(1) : "0.0",
-        ...checkNum(gStl, tStl, 0.5),
-      },
-      blk: {
-        val: isFinite(gBlk) ? gBlk.toFixed(1) : "0.0",
-        ...checkNum(gBlk, tBlk, 0.5),
-      },
-      fg3m: {
-        val: isFinite(g3m) ? g3m.toFixed(1) : "0.0",
-        ...checkNum(g3m, t3m, 0.5),
-      },
-    };
-    cols = ["name", "team", "pts", "reb", "ast", "stl", "blk", "fg3m"];
+  if (row.correct || guessCount >= MAX_GUESSES) {
+    gameOver = true;
+    document.getElementById("player-input").disabled = true;
+    setTimeout(() => showWinModal(!row.correct), 500);
   }
+}
 
-  renderRow(stats, cols);
+// Versus guesses are scored by the server, which alone knows the target.
+let vsGuessInFlight = false;
+async function processVsGuess(guess) {
+  if (vsGuessInFlight || !vsPin) return;
+  vsGuessInFlight = true;
+  try {
+    const res = await fetch("/api/vs/guess", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pin: vsPin, player_id: vsPlayerId, guess_id: guess.id }),
+    });
+    if (!res.ok) throw new Error("guess failed: " + res.status);
+    const data = await res.json();
+    if (gameOver) return; // round ended while the request was in flight
+
+    renderRow(data.row, COLUMNS[currentMode]);
+    await applyVsState(data);
+  } catch (err) {
+    console.warn("Failed to submit VS guess", err);
+  } finally {
+    vsGuessInFlight = false;
+  }
 }
 
 const CELL_LABELS = {
@@ -250,55 +210,24 @@ const CELL_LABELS = {
 };
 
 // ── Render ─────────────────────────────────────────────────────
-function renderRow(stats, cols) {
+function renderRow(row, cols) {
   const container = document.getElementById("guesses-container");
-  const row = document.createElement("div");
-  row.className = "guess-row";
+  const rowEl = document.createElement("div");
+  rowEl.className = "guess-row";
 
   cols.forEach((c) => {
+    const cell = c === "name" ? null : row.cells[c];
     const div = document.createElement("div");
-    div.className = (
-      "cell " +
-      (c === "name" ? "name-cell" : "") +
-      " " +
-      (c !== "name" ? stats[c].status || "" : "")
-    ).trim();
-    if (c !== "name") {
-      div.dataset.label = CELL_LABELS[c] || c;
-    }
+    div.className = ("cell " + (c === "name" ? "name-cell" : cell.status || "")).trim();
+    if (c !== "name") div.dataset.label = CELL_LABELS[c] || c;
     const inner = document.createElement("div");
     inner.className = "inner";
-    if (c === "name") {
-      inner.textContent = stats[c];
-    } else {
-      inner.textContent = stats[c].val + (stats[c].arrow || "");
-    }
+    inner.textContent = c === "name" ? row.name : cell.val + (cell.arrow || "");
     div.appendChild(inner);
-    row.appendChild(div);
+    rowEl.appendChild(div);
   });
 
-  container.insertBefore(row, container.firstChild);
-
-  const won = stats.name === targetPlayer.name;
-
-  if (vsMode) {
-    // Report every guess to server; check win condition locally
-    reportVsGuess(won);
-    if (won) {
-      vsWinner = vsRole;
-      // Keep polling alive — it will detect rematch (round change) automatically
-      gameOver = true;
-      document.getElementById("player-input").disabled = true;
-      setTimeout(() => showWinModal(false), 500);
-    }
-    // No max-guess limit in VS — game continues until someone wins
-  } else {
-    if (won || guessCount >= MAX_GUESSES) {
-      gameOver = true;
-      document.getElementById("player-input").disabled = true;
-      setTimeout(() => showWinModal(!won), 500);
-    }
-  }
+  container.insertBefore(rowEl, container.firstChild);
 }
 
 // ── Win / result modal ─────────────────────────────────────────
@@ -309,11 +238,18 @@ function showWinModal(gaveUp) {
   const rematchBtn = document.getElementById("vs-rematch-btn");
 
   if (vsMode) {
-    if (vsForfeited) {
+    if (vsForfeitedBy === vsRole) {
       titleEl.textContent = "You Gave Up!";
       titleEl.style.color = "#c0392b";
       if (subtitleEl) {
         subtitleEl.textContent = "Your opponent wins this round.";
+        subtitleEl.style.display = "";
+      }
+    } else if (vsForfeitedBy) {
+      titleEl.textContent = "Opponent Gave Up!";
+      titleEl.style.color = "#27ae60";
+      if (subtitleEl) {
+        subtitleEl.textContent = "You win this round.";
         subtitleEl.style.display = "";
       }
     } else {
@@ -369,6 +305,18 @@ function setupHelpButton() {
 }
 
 // ── Autocomplete ───────────────────────────────────────────────
+// Case- and accent-insensitive key, so "jokic" finds "Jokić" (the on-screen
+// keyboard has no accented letters). Stripping combining marks keeps the
+// character count of Latin names, so indexes line up for highlighting.
+function fold(str) {
+  return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+function findPlayerByName(text) {
+  const key = fold(text.trim());
+  return players.find((p) => fold(p.name) === key);
+}
+
 function setupAutocomplete() {
   const input = document.getElementById("player-input");
   const list = document.getElementById("autocomplete-list");
@@ -376,15 +324,16 @@ function setupAutocomplete() {
   input.addEventListener("input", function () {
     list.innerHTML = "";
     if (!this.value) return;
-    const val = this.value.toLowerCase();
+    const val = fold(this.value);
     players
-      .filter((p) => p.name.toLowerCase().includes(val))
+      .filter((p) => fold(p.name).includes(val))
       .forEach((match) => {
+        // Highlight the typed text with DOM nodes (no regex/innerHTML from user input)
         const div = document.createElement("div");
-        div.innerHTML = match.name.replace(
-          new RegExp("(" + val + ")", "gi"),
-          "<strong>$1</strong>",
-        );
+        const at = fold(match.name).indexOf(val);
+        const strong = document.createElement("strong");
+        strong.textContent = match.name.slice(at, at + val.length);
+        div.append(match.name.slice(0, at), strong, match.name.slice(at + val.length));
         div.addEventListener("click", () => {
           input.value = "";
           list.innerHTML = "";
@@ -400,9 +349,7 @@ function setupAutocomplete() {
 
   input.addEventListener("keydown", function (e) {
     if (e.key === "Enter") {
-      const match = players.find(
-        (p) => p.name.toLowerCase() === this.value.trim().toLowerCase(),
-      );
+      const match = findPlayerByName(this.value);
       if (match) {
         processGuess(match.name);
         this.value = "";
@@ -420,38 +367,31 @@ function setupHintButton() {
   const teamLogoImg = document.getElementById("team-logo-img");
 
   btn.addEventListener("click", async () => {
-    if (!targetPlayer) return;
+    if (!targetPlayer && !vsMode) return;
+    if (!targetImages) await loadTargetImages();
     if (currentMode === "stats") {
-      try {
-        const data = await (
-          await fetch("/api/team_logo/" + targetPlayer.team)
-        ).json();
-        if (data.logo) {
-          teamLogoImg.src = data.logo;
-          teamLogoImg.style.display = "block";
-          placeholder.style.display = "none";
-          silhouetteImg.style.display = "none";
-        }
-      } catch (e) {
-        console.warn("Logo fetch failed", e);
-      }
-    } else {
-      if (!targetImages) await loadTargetImages();
-      if (targetImages?.headshot) {
-        await generateSilhouette(targetImages.headshot);
-        silhouetteImg.style.display = "block";
-        teamLogoImg.style.display = "none";
+      if (targetImages?.logo) {
+        teamLogoImg.src = targetImages.logo;
+        teamLogoImg.style.display = "block";
         placeholder.style.display = "none";
+        silhouetteImg.style.display = "none";
       }
+    } else if (targetImages?.headshot && (await generateSilhouette(targetImages.headshot))) {
+      silhouetteImg.style.display = "block";
+      teamLogoImg.style.display = "none";
+      placeholder.style.display = "none";
+    } else {
+      return; // leave the button enabled so the hint can be retried
     }
     btn.disabled = true;
     btn.textContent = "Hint Shown";
   });
 }
 
+// Resolves true once the silhouette is drawn. On failure it never falls back to
+// the raw headshot, which would give the answer away.
 async function generateSilhouette(url) {
   const img = new Image();
-  img.crossOrigin = "anonymous";
   img.src = url;
   const sil = document.getElementById("silhouette-img");
   const canvas = document.getElementById("silhouette-canvas");
@@ -470,12 +410,9 @@ async function generateSilhouette(url) {
         }
       ctx.putImageData(d, 0, 0);
       sil.src = canvas.toDataURL("image/png");
-      res();
+      res(true);
     };
-    img.onerror = () => {
-      sil.src = url;
-      res();
-    };
+    img.onerror = () => res(false);
   });
 }
 
@@ -560,12 +497,8 @@ async function startSoloGame() {
   resetGuessCounter();
   document.getElementById("guesses-container").innerHTML = "";
 
-  if (players.length > 0)
-    targetPlayer = players[Math.floor(Math.random() * players.length)];
-  targetImages = null;
-  await loadTargetImages();
-
   showScreen("game-screen");
+  await fetchPlayers();
   showOsk();
 }
 
@@ -611,7 +544,7 @@ function setupVersusCreate() {
   });
 
   document.getElementById("vs-starter-toggle").addEventListener("change", (e) => {
-    startersOnly = e.target.checked;
+    vsStartersOnly = e.target.checked;
   });
 
   document.querySelectorAll(".mode-btn[data-vs-mode]").forEach((btn) => {
@@ -619,6 +552,17 @@ function setupVersusCreate() {
       await createVsGame(btn.dataset.vsMode);
     });
   });
+}
+
+async function postVs(action, payload) {
+  const res = await fetch("/api/vs/" + action, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pin: vsPin, player_id: vsPlayerId, ...payload }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(data.error || "Request failed"), { data });
+  return data;
 }
 
 async function createVsGame(mode) {
@@ -632,21 +576,13 @@ async function createVsGame(mode) {
   document.getElementById("copy-pin-btn").textContent = "Copy PIN";
 
   try {
-    const res = await fetch("/api/vs/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        mode,
-        starters_only: startersOnly,
-        player_id: vsPlayerId,
-      }),
-    });
-    const data = await res.json();
+    const data = await postVs("create", { mode, starters_only: vsStartersOnly });
 
     vsPin = data.pin;
     vsRole = "host";
+    vsRound = data.round;
     vsGameStarted = false;
-    targetPlayer = data.target_player;
+    targetPlayer = null;
     targetImages = null;
 
     document.getElementById("vs-pin-display").textContent = data.pin;
@@ -686,7 +622,7 @@ async function joinVsGame() {
   const errEl = document.getElementById("join-error");
   const submitBtn = document.getElementById("join-game-submit-btn");
 
-  if (pin.length < 4) {
+  if (pin.length !== 6) {
     errEl.textContent = "Please enter a valid PIN.";
     errEl.style.display = "";
     return;
@@ -696,74 +632,55 @@ async function joinVsGame() {
   submitBtn.disabled = true;
   submitBtn.textContent = "Joining…";
 
+  let data;
   try {
-    const res = await fetch("/api/vs/join", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin, player_id: vsPlayerId }),
-    });
-
-    if (!res.ok) {
-      const data = await res.json();
-      errEl.textContent = data.error || "Could not join. Check the PIN.";
-      errEl.style.display = "";
-      submitBtn.disabled = false;
-      submitBtn.textContent = "Join Game";
-      return;
-    }
-
-    const data = await res.json();
-    vsPin = data.pin;
-    vsRole = data.role;           // 'host' | 'challenger'
-    currentMode = data.mode;
-    targetPlayer = data.target_player;
-    targetImages = null;
-
-    const yourCount = data.your_guess_count || 0;
-    const oppCount  = data.opponent_guess_count || 0;
-
-    // Game already over — show result
-    if (data.winner) {
-      vsWinner = data.winner;
-      vsGameStarted = true;
-      await startVsGame(yourCount, oppCount);
-      setTimeout(() => showWinModal(false), 300);
-      return;
-    }
-
-    // Host reconnecting before challenger arrived — back to waiting screen
-    if (data.role === "host" && !data.started) {
-      vsGameStarted = false;
-      document.getElementById("vs-pin-display").textContent = vsPin;
-      document.getElementById("vs-waiting-status").textContent = "Waiting for opponent…";
-      document.getElementById("copy-pin-btn").textContent = "Copy PIN";
-      document.getElementById("vs-mode-select-step").style.display = "none";
-      document.getElementById("vs-waiting-step").style.display = "";
-      showScreen("versus-create-screen");
-      startVsPolling();
-      return;
-    }
-
-    // Host reconnecting mid-game OR challenger (new or returning)
-    vsGameStarted = true;
-    await startVsGame(yourCount, oppCount);
-    startVsPolling();
+    vsPin = pin;
+    data = await postVs("join");
   } catch (err) {
-    errEl.textContent = "Connection error. Try again.";
+    vsPin = null;
+    errEl.textContent = err.data?.error || "Connection error. Try again.";
     errEl.style.display = "";
     submitBtn.disabled = false;
     submitBtn.textContent = "Join Game";
+    return;
   }
+
+  vsRole = data.role; // 'host' | 'challenger'
+  vsRound = data.round;
+  currentMode = data.mode;
+  targetPlayer = data.target_player; // only present once the round is decided
+  targetImages = null;
+
+  // Host reconnecting before challenger arrived — back to waiting screen
+  if (data.role === "host" && !data.started) {
+    vsGameStarted = false;
+    document.getElementById("vs-pin-display").textContent = vsPin;
+    document.getElementById("vs-waiting-status").textContent = "Waiting for opponent…";
+    document.getElementById("copy-pin-btn").textContent = "Copy PIN";
+    document.getElementById("vs-mode-select-step").style.display = "none";
+    document.getElementById("vs-waiting-step").style.display = "";
+    showScreen("versus-create-screen");
+    startVsPolling();
+    return;
+  }
+
+  // Host reconnecting mid-game, or challenger (new or returning)
+  vsGameStarted = true;
+  await startVsGame(data);
+  startVsPolling();
 }
 
 // ── VS game launch ─────────────────────────────────────────────
-// yourCount / oppCount let reconnecting players restore accurate counts.
-async function startVsGame(yourCount = 0, oppCount = 0) {
+// `state` is the server's room state, so reconnecting players restore accurate counts.
+async function startVsGame(state) {
   vsMode = true;
-  guessCount = yourCount;
-  vsOpponentGuessCount = oppCount;
+  vsWinner = null;
+  vsForfeitedBy = null;
   gameOver = false;
-  vsForfeited = false;
+  guessCount = 0;
+  vsOpponentGuessCount = 0;
+  targetPlayer = null;
+  targetImages = null;
 
   const classicHeader = document.getElementById("classic-header");
   const statsHeader = document.getElementById("stats-header");
@@ -772,16 +689,48 @@ async function startVsGame(yourCount = 0, oppCount = 0) {
   classicHeader.style.display = currentMode === "classic" ? "flex" : "none";
   statsHeader.style.display = currentMode === "stats" ? "flex" : "none";
 
-  enterVsGameUi();   // sets status bar counts + PIN from current state
   resetHintVisuals();
-  updateGuessCounter();
   document.getElementById("player-input").disabled = false;
   document.getElementById("guesses-container").innerHTML = "";
-
-  await loadTargetImages();
+  document.getElementById("win-modal").style.display = "none";
 
   showScreen("game-screen");
+  enterVsGameUi();
   showOsk();
+
+  // Any player can be guessed in versus, regardless of the solo starters toggle
+  try {
+    await loadAllPlayers();
+    players = [...allPlayers];
+  } catch (err) {
+    console.error("Could not load players", err);
+  }
+
+  await applyVsState(state);
+}
+
+// Syncs counts/winner from any server response and ends the round when decided.
+async function applyVsState(state) {
+  if (!state) return;
+  const mine = vsRole === "host" ? state.host_guess_count : state.challenger_guess_count;
+  const theirs = vsRole === "host" ? state.challenger_guess_count : state.host_guess_count;
+  guessCount = Math.max(guessCount, mine || 0);
+  vsOpponentGuessCount = theirs || 0;
+  updateGuessCounter();
+  document.getElementById("vs-your-guesses").textContent = guessCount;
+  document.getElementById("vs-opponent-guesses").textContent = vsOpponentGuessCount;
+
+  if (state.winner && !gameOver) {
+    gameOver = true;
+    vsWinner = state.winner;
+    vsForfeitedBy = state.forfeited_by || null;
+    if (state.target_player) {
+      targetPlayer = state.target_player;
+      targetImages = { headshot: "/api/headshot/" + targetPlayer.id };
+    }
+    document.getElementById("player-input").disabled = true;
+    setTimeout(() => showWinModal(false), 300);
+  }
 }
 
 // ── VS polling ─────────────────────────────────────────────────
@@ -801,9 +750,7 @@ async function pollVsStatus() {
   if (!vsPin) return;
 
   try {
-    const res = await fetch(
-      `/api/vs/status/${vsPin}?player_id=${vsPlayerId}`
-    );
+    const res = await fetch(`/api/vs/status/${vsPin}`);
     if (!res.ok) return;
     const data = await res.json();
 
@@ -811,8 +758,7 @@ async function pollVsStatus() {
     if (vsRole === "host" && !vsGameStarted) {
       if (data.started) {
         vsGameStarted = true;
-        await startVsGame(0, data.challenger_guess_count || 0);
-        startVsPolling();
+        await startVsGame(data);
       }
       return;
     }
@@ -820,77 +766,14 @@ async function pollVsStatus() {
     // Phase 3 — rematch: server round advanced (challenger detects host's Play Again)
     if (data.round > vsRound) {
       vsRound = data.round;
-      targetPlayer = data.target_player;
-      targetImages = null;
-      vsWinner = null;
-      gameOver = false;
-      document.getElementById("win-modal").style.display = "none";
-      await startVsGame(0, 0);
+      await startVsGame(data);
       return;
     }
 
-    // Phase 2 — in-game (skip count/win updates once game is over; wait for rematch)
-    if (gameOver) return;
-
-    // Sync both counts from server truth
-    vsOpponentGuessCount =
-      vsRole === "host" ? data.challenger_guess_count : data.host_guess_count;
-    const serverYours =
-      vsRole === "host" ? data.host_guess_count : data.challenger_guess_count;
-
-    const oppEl = document.getElementById("vs-opponent-guesses");
-    if (oppEl) oppEl.textContent = vsOpponentGuessCount;
-
-    // Reconcile our count with server (catches reconnection drift)
-    if (serverYours > guessCount) {
-      guessCount = serverYours;
-      updateGuessCounter();
-      const yourEl = document.getElementById("vs-your-guesses");
-      if (yourEl) yourEl.textContent = guessCount;
-    }
-
-    // Detect winner (opponent guessed correctly or opponent forfeited giving us the win)
-    if (data.winner && !vsWinner) {
-      vsWinner = data.winner;
-
-      // Only show modal if we haven't already ended the game locally
-      if (!gameOver) {
-        gameOver = true;
-        if (data.target_player) targetPlayer = data.target_player;
-        if (targetPlayer) {
-          try {
-            const imgRes = await fetch("/api/player_image/" + targetPlayer.id);
-            const imgJson = await imgRes.json();
-            if (imgJson.headshot) targetImages = imgJson;
-          } catch (_) {}
-        }
-        document.getElementById("player-input").disabled = true;
-        setTimeout(() => showWinModal(false), 300);
-      }
-    }
+    // Phase 2 — in-game: sync counts and detect the opponent winning or forfeiting
+    await applyVsState(data);
   } catch (_) {
     // Ignore network errors during polling
-  }
-}
-
-// ── Report guess to server ─────────────────────────────────────
-async function reportVsGuess(correct) {
-  const yourEl = document.getElementById("vs-your-guesses");
-  if (yourEl) yourEl.textContent = guessCount;
-
-  if (!vsPin || !vsPlayerId) return;
-  try {
-    await fetch("/api/vs/guess", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        pin: vsPin,
-        player_id: vsPlayerId,
-        correct,
-      }),
-    });
-  } catch (err) {
-    console.warn("Failed to report VS guess", err);
   }
 }
 
@@ -902,22 +785,9 @@ function setupVsRematch() {
     btn.textContent = "Starting…";
 
     try {
-      const res = await fetch("/api/vs/rematch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: vsPin, player_id: vsPlayerId }),
-      });
-      if (!res.ok) throw new Error("rematch failed");
-      const data = await res.json();
-
+      const data = await postVs("rematch");
       vsRound = data.round;
-      targetPlayer = data.target_player;
-      targetImages = null;
-      vsWinner = null;
-      gameOver = false;
-
-      document.getElementById("win-modal").style.display = "none";
-      await startVsGame(0, 0);
+      await startVsGame(data);
       // Polling already running — challenger will detect the new round automatically
     } catch (_) {
       btn.disabled = false;
@@ -936,7 +806,9 @@ function resetVsState() {
   vsGameStarted = false;
   vsOpponentGuessCount = 0;
   vsRound = 1;
-  vsForfeited = false;
+  vsForfeitedBy = null;
+  targetPlayer = null;
+  targetImages = null;
 }
 
 // ── Back button ────────────────────────────────────────────────
@@ -955,10 +827,8 @@ function setupBackButton() {
     } else {
       exitVsGameUi();
       showScreen("start-screen");
-      if (players.length > 0) {
-        targetPlayer = players[Math.floor(Math.random() * players.length)];
-        targetImages = null;
-      }
+      targetPlayer = pickRandom(players);
+      targetImages = null;
     }
   });
 }
@@ -978,9 +848,7 @@ function setupPlayAgain() {
     document.getElementById("guesses-container").innerHTML = "";
     resetHintVisuals();
     resetGuessCounter();
-    if (players.length > 0)
-      targetPlayer = players[Math.floor(Math.random() * players.length)];
-    targetImages = null;
+    targetPlayer = pickRandom(players);
     await loadTargetImages();
     showOsk();
   });
@@ -989,24 +857,22 @@ function setupPlayAgain() {
 // ── Give up ────────────────────────────────────────────────────
 function setupGiveUp() {
   document.getElementById("give-up-button").addEventListener("click", async () => {
-    if (!targetPlayer || gameOver) return;
-    gameOver = true;
-    document.getElementById("player-input").disabled = true;
+    if (gameOver) return;
 
     if (vsMode) {
-      vsForfeited = true;
-      vsWinner = vsRole === "host" ? "challenger" : "host";
+      // The server reveals the target once the round is decided
       try {
-        await fetch("/api/vs/forfeit", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pin: vsPin, player_id: vsPlayerId }),
-        });
+        const state = await postVs("forfeit");
+        await applyVsState(state);
       } catch (err) {
         console.warn("Failed to report VS forfeit", err);
       }
+      return;
     }
 
+    if (!targetPlayer) return;
+    gameOver = true;
+    document.getElementById("player-input").disabled = true;
     showWinModal(true);
   });
 }
@@ -1107,8 +973,7 @@ function setupOnscreenKeyboard() {
       flash(enterBtn);
       if (gameOver) return;
 
-      const val = input.value.trim().toLowerCase();
-      let match = players.find((p) => p.name.toLowerCase() === val);
+      let match = findPlayerByName(input.value);
 
       if (!match) {
         const list = document.getElementById("autocomplete-list");

@@ -2,306 +2,371 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
-    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b1220" />
     <title>NBADLE</title>
+    <meta
+      name="description"
+      content="Guess the NBA player from team, position, height, age, jersey number or stats. Play solo or challenge a friend."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
-      href="/css/styles.css"
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;0,800;1,800&family=Inter:wght@400;500;600;700&display=swap"
     />
+    <link rel="stylesheet" href="/css/styles.css" />
     <script src="https://cdn.jsdelivr.net/npm/lucide@1.48.0/dist/umd/lucide.min.js"></script>
   </head>
   <body>
-    <div class="container">
+    <div class="app">
 
-      <!-- ── LANDING SCREEN ───────────────────────────────────── -->
-      <div id="landing-screen">
-        <h1>NBADLE</h1>
-        <p class="start-subtitle">Guess the NBA player. New game every time.</p>
-        <div class="mode-buttons">
-          <button class="mode-btn" id="solo-btn">
+      <!-- ── LANDING ──────────────────────────────────────────── -->
+      <main id="landing-screen" class="screen screen--landing">
+        <div class="hero">
+          <div class="brand brand--hero" aria-label="NBADLE">
+            <svg class="brand-ball" viewBox="0 0 40 40" aria-hidden="true">
+              <circle cx="20" cy="20" r="18" />
+              <path d="M2 20h36M20 2v36M7.5 7.5c6 5 6 20 0 25M32.5 7.5c-6 5-6 20 0 25" />
+            </svg>
+            <span class="brand-word">NBADLE</span>
+          </div>
+          <p class="tagline">Guess the NBA player. New game every time.</p>
+        </div>
+        <div class="mode-grid">
+          <button class="mode-card" id="solo-btn">
             <span class="mode-icon"><i data-lucide="user"></i></span>
-            <span class="mode-label">Solo</span>
-            <span class="mode-desc">Play by yourself</span>
+            <span class="mode-text">
+              <span class="mode-label">Solo</span>
+              <span class="mode-desc">8 guesses to name the mystery player</span>
+            </span>
+            <i class="mode-chevron" data-lucide="chevron-right"></i>
           </button>
-          <button class="mode-btn" id="versus-btn">
+          <button class="mode-card" id="versus-btn">
             <span class="mode-icon"><i data-lucide="users"></i></span>
-            <span class="mode-label">Versus</span>
-            <span class="mode-desc">Challenge a friend</span>
+            <span class="mode-text">
+              <span class="mode-label">Versus</span>
+              <span class="mode-desc">Race a friend to the same player</span>
+            </span>
+            <i class="mode-chevron" data-lucide="chevron-right"></i>
           </button>
         </div>
-      </div>
+        <button class="link-btn" id="landing-help-btn"><i data-lucide="circle-help"></i> How to play</button>
+      </main>
 
       <!-- ── SOLO MODE SELECT ─────────────────────────────────── -->
-      <div id="start-screen" style="display: none">
-        <div class="screen-back-bar">
-          <button class="back-link-btn" id="solo-back-btn"><i data-lucide="chevron-left"></i> Back</button>
-          <span class="screen-logo">NBADLE</span>
+      <main id="start-screen" class="screen" style="display: none">
+        <div class="screen-bar">
+          <button class="icon-btn" id="solo-back-btn" aria-label="Back"><i data-lucide="chevron-left"></i></button>
+          <span class="brand brand--sm"><span class="brand-word">NBADLE</span></span>
+          <span class="screen-bar-spacer"></span>
         </div>
-        <p class="start-subtitle sub-screen-subtitle">Choose your mode</p>
-        <div class="mode-buttons">
-          <button class="mode-btn" data-mode="classic">
+        <h2 class="screen-title">Choose your mode</h2>
+        <div class="mode-grid">
+          <button class="mode-card" data-mode="classic">
             <span class="mode-icon"><i data-lucide="layout-list"></i></span>
-            <span class="mode-label">Classic</span>
-            <span class="mode-desc">Team · Conf · Pos · Height · Age · #</span>
-          </button>
-          <button class="mode-btn" data-mode="stats">
-            <span class="mode-icon"><i data-lucide="bar-chart-2"></i></span>
-            <span class="mode-label">Stats</span>
-            <span class="mode-desc">PTS · REB · AST · STL · BLK · 3PM</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- ── VERSUS LOBBY ─────────────────────────────────────── -->
-      <div id="versus-lobby-screen" style="display: none">
-        <div class="screen-back-bar">
-          <button class="back-link-btn" id="versus-back-btn"><i data-lucide="chevron-left"></i> Back</button>
-          <span class="screen-logo">NBADLE</span>
-        </div>
-        <p class="start-subtitle sub-screen-subtitle">Versus Mode</p>
-        <div class="mode-buttons">
-          <button class="mode-btn" id="create-game-btn">
-            <span class="mode-icon"><i data-lucide="key"></i></span>
-            <span class="mode-label">Create</span>
-            <span class="mode-desc">Host a game &amp; share PIN</span>
-          </button>
-          <button class="mode-btn" id="join-game-btn">
-            <span class="mode-icon"><i data-lucide="log-in"></i></span>
-            <span class="mode-label">Join</span>
-            <span class="mode-desc">Enter your opponent's PIN</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- ── VERSUS CREATE SCREEN ─────────────────────────────── -->
-      <div id="versus-create-screen" style="display: none">
-
-        <!-- Step 1: mode select -->
-        <div id="vs-mode-select-step">
-          <div class="screen-back-bar">
-            <button class="back-link-btn" id="vs-create-back-btn"><i data-lucide="chevron-left"></i> Back</button>
-            <span class="screen-logo">NBADLE</span>
-          </div>
-          <p class="start-subtitle sub-screen-subtitle">Choose game mode</p>
-          <!-- Starters-only toggle for host -->
-          <div class="vs-starters-row">
-            <label class="switch">
-              <input type="checkbox" id="vs-starter-toggle" />
-              <span class="slider"></span>
-            </label>
-            <span class="vs-starters-label">Starters Only</span>
-          </div>
-          <div class="mode-buttons">
-            <button class="mode-btn" data-vs-mode="classic">
-              <span class="mode-icon"><i data-lucide="layout-list"></i></span>
+            <span class="mode-text">
               <span class="mode-label">Classic</span>
-              <span class="mode-desc">Team · Conf · Pos · Height · Age · #</span>
-            </button>
-            <button class="mode-btn" data-vs-mode="stats">
-              <span class="mode-icon"><i data-lucide="bar-chart-2"></i></span>
+              <span class="mode-desc">Team · Conf · Div · Pos · Height · Age · #</span>
+            </span>
+            <i class="mode-chevron" data-lucide="chevron-right"></i>
+          </button>
+          <button class="mode-card" data-mode="stats">
+            <span class="mode-icon"><i data-lucide="bar-chart-2"></i></span>
+            <span class="mode-text">
               <span class="mode-label">Stats</span>
               <span class="mode-desc">PTS · REB · AST · STL · BLK · 3PM</span>
+            </span>
+            <i class="mode-chevron" data-lucide="chevron-right"></i>
+          </button>
+        </div>
+      </main>
+
+      <!-- ── VERSUS LOBBY ─────────────────────────────────────── -->
+      <main id="versus-lobby-screen" class="screen" style="display: none">
+        <div class="screen-bar">
+          <button class="icon-btn" id="versus-back-btn" aria-label="Back"><i data-lucide="chevron-left"></i></button>
+          <span class="brand brand--sm"><span class="brand-word">NBADLE</span></span>
+          <span class="screen-bar-spacer"></span>
+        </div>
+        <h2 class="screen-title">Versus</h2>
+        <p class="screen-sub">Same mystery player, unlimited guesses. First to name them wins.</p>
+        <div class="mode-grid">
+          <button class="mode-card" id="create-game-btn">
+            <span class="mode-icon"><i data-lucide="key-round"></i></span>
+            <span class="mode-text">
+              <span class="mode-label">Create</span>
+              <span class="mode-desc">Host a game and share the PIN</span>
+            </span>
+            <i class="mode-chevron" data-lucide="chevron-right"></i>
+          </button>
+          <button class="mode-card" id="join-game-btn">
+            <span class="mode-icon"><i data-lucide="log-in"></i></span>
+            <span class="mode-text">
+              <span class="mode-label">Join</span>
+              <span class="mode-desc">Enter your opponent's PIN</span>
+            </span>
+            <i class="mode-chevron" data-lucide="chevron-right"></i>
+          </button>
+        </div>
+      </main>
+
+      <!-- ── VERSUS CREATE ────────────────────────────────────── -->
+      <main id="versus-create-screen" class="screen" style="display: none">
+        <!-- Step 1: mode select -->
+        <div id="vs-mode-select-step">
+          <div class="screen-bar">
+            <button class="icon-btn" id="vs-create-back-btn" aria-label="Back"><i data-lucide="chevron-left"></i></button>
+            <span class="brand brand--sm"><span class="brand-word">NBADLE</span></span>
+            <span class="screen-bar-spacer"></span>
+          </div>
+          <h2 class="screen-title">Choose game mode</h2>
+          <label class="toggle-row">
+            <span class="switch">
+              <input type="checkbox" id="vs-starter-toggle" />
+              <span class="slider"></span>
+            </span>
+            <span>
+              <span class="toggle-title">Starters only</span>
+              <span class="toggle-desc">Limit the mystery player to impact players</span>
+            </span>
+          </label>
+          <div class="mode-grid">
+            <button class="mode-card" data-vs-mode="classic">
+              <span class="mode-icon"><i data-lucide="layout-list"></i></span>
+              <span class="mode-text">
+                <span class="mode-label">Classic</span>
+                <span class="mode-desc">Team · Conf · Div · Pos · Height · Age · #</span>
+              </span>
+              <i class="mode-chevron" data-lucide="chevron-right"></i>
+            </button>
+            <button class="mode-card" data-vs-mode="stats">
+              <span class="mode-icon"><i data-lucide="bar-chart-2"></i></span>
+              <span class="mode-text">
+                <span class="mode-label">Stats</span>
+                <span class="mode-desc">PTS · REB · AST · STL · BLK · 3PM</span>
+              </span>
+              <i class="mode-chevron" data-lucide="chevron-right"></i>
             </button>
           </div>
         </div>
 
         <!-- Step 2: waiting for opponent -->
-        <div id="vs-waiting-step" style="display: none" class="vs-waiting-container">
-          <div class="screen-back-bar">
-            <button class="back-link-btn" id="cancel-vs-btn"><i data-lucide="x"></i> Cancel</button>
-            <span class="screen-logo">NBADLE</span>
+        <div id="vs-waiting-step" style="display: none">
+          <div class="screen-bar">
+            <button class="icon-btn" id="cancel-vs-btn" aria-label="Cancel"><i data-lucide="x"></i></button>
+            <span class="brand brand--sm"><span class="brand-word">NBADLE</span></span>
+            <span class="screen-bar-spacer"></span>
           </div>
-          <p class="vs-share-text">Share this PIN with your opponent:</p>
-          <div class="pin-display" id="vs-pin-display">------</div>
-          <p class="vs-waiting-status" id="vs-waiting-status">Creating game…</p>
-          <button class="btn-secondary" id="copy-pin-btn">Copy PIN</button>
+          <div class="pin-panel">
+            <p class="pin-caption">Share this PIN with your opponent</p>
+            <div class="pin-display" id="vs-pin-display">------</div>
+            <p class="waiting-status"><span class="live-dot"></span><span id="vs-waiting-status">Creating game…</span></p>
+            <button class="btn btn--ghost" id="copy-pin-btn"><i data-lucide="copy"></i> <span>Copy PIN</span></button>
+          </div>
         </div>
+      </main>
 
-      </div>
-
-      <!-- ── VERSUS JOIN SCREEN ───────────────────────────────── -->
-      <div id="versus-join-screen" style="display: none" class="vs-join-container">
-        <div class="screen-back-bar">
-          <button class="back-link-btn" id="vs-join-back-btn"><i data-lucide="chevron-left"></i> Back</button>
-          <span class="screen-logo">NBADLE</span>
+      <!-- ── VERSUS JOIN ──────────────────────────────────────── -->
+      <main id="versus-join-screen" class="screen" style="display: none">
+        <div class="screen-bar">
+          <button class="icon-btn" id="vs-join-back-btn" aria-label="Back"><i data-lucide="chevron-left"></i></button>
+          <span class="brand brand--sm"><span class="brand-word">NBADLE</span></span>
+          <span class="screen-bar-spacer"></span>
         </div>
-        <p class="start-subtitle sub-screen-subtitle">Enter game PIN</p>
-        <div class="pin-input-group">
+        <h2 class="screen-title">Enter game PIN</h2>
+        <div class="pin-panel">
           <input
             type="text"
             id="pin-input"
+            class="pin-input"
             placeholder="ABC123"
             maxlength="6"
             autocomplete="off"
             autocapitalize="characters"
             spellcheck="false"
+            aria-label="Game PIN"
           />
-          <p class="join-error" id="join-error" style="display: none"></p>
-          <button class="btn-primary" id="join-game-submit-btn">Join Game</button>
+          <p class="form-error" id="join-error" style="display: none"></p>
+          <button class="btn btn--primary btn--wide" id="join-game-submit-btn">Join Game</button>
         </div>
-      </div>
+      </main>
 
-      <!-- ── GAME SCREEN ──────────────────────────────────────── -->
-      <div id="game-screen" style="display: none">
-        <div class="game-header">
-          <div class="header-left">
-            <button id="back-button" class="icon-btn" aria-label="Back"><i data-lucide="chevron-left"></i></button>
+      <!-- ── GAME ─────────────────────────────────────────────── -->
+      <main id="game-screen" class="screen screen--game" style="display: none">
+        <header class="game-header">
+          <button id="back-button" class="icon-btn" aria-label="Back"><i data-lucide="chevron-left"></i></button>
+          <div class="game-title">
+            <span class="brand brand--sm"><span class="brand-word">NBADLE</span></span>
+            <span id="game-mode-label" class="mode-pill">Classic</span>
           </div>
-          <h1 id="game-title">
-            <span class="title-logo">NBADLE</span>
-            <span id="game-mode-label">Classic</span>
-          </h1>
-          <div class="header-right">
-            <div class="starter-filter">
-              <label class="switch">
+          <div class="header-actions">
+            <label class="starter-filter" title="Only impact players can be the mystery player">
+              <span class="switch switch--sm">
                 <input type="checkbox" id="starter-toggle" />
                 <span class="slider"></span>
-              </label>
-              <span class="filter-label">Starters Only</span>
-            </div>
-            <button id="help-button" class="icon-btn" aria-label="How to Play">?</button>
-            <button id="give-up-button" class="give-up-btn">Give Up</button>
+              </span>
+              <span class="filter-label">Starters</span>
+            </label>
+            <button id="stats-button" class="icon-btn" aria-label="Your stats"><i data-lucide="bar-chart-2"></i></button>
+            <button id="help-button" class="icon-btn" aria-label="How to play"><i data-lucide="circle-help"></i></button>
+          </div>
+        </header>
+
+        <!-- VS scoreboard (hidden in solo) -->
+        <div id="vs-status-bar" class="scoreboard" style="display: none">
+          <div class="score score--you">
+            <span class="score-label">You</span>
+            <strong class="score-value" id="vs-your-guesses">0</strong>
+          </div>
+          <div class="score-mid">
+            <span class="score-vs">VS</span>
+            <span class="score-pin">PIN <strong id="vs-game-pin">------</strong></span>
+          </div>
+          <div class="score score--opp">
+            <span class="score-label">Opponent</span>
+            <strong class="score-value" id="vs-opponent-guesses">0</strong>
           </div>
         </div>
 
-        <!-- VS status bar (hidden in solo) -->
-        <div id="vs-status-bar" style="display: none">
-          <div class="vs-status-inner">
-            <span class="vs-player-stat">You: <strong id="vs-your-guesses">0</strong></span>
-            <span class="vs-vs-label">VS</span>
-            <span class="vs-player-stat">Opponent: <strong id="vs-opponent-guesses">0</strong></span>
-            <span class="vs-pin-chip">PIN: <strong id="vs-game-pin">------</strong></span>
-          </div>
-        </div>
+        <div id="loading-indicator" class="loading">Loading roster…</div>
 
-        <div id="loading-indicator">Fetching live roster data…</div>
-
-        <div class="top-bar">
+        <section class="play-area">
           <div class="search-col">
             <div class="input-container">
+              <i class="input-icon" data-lucide="search"></i>
               <input
                 type="text"
                 id="player-input"
                 placeholder="Type a player name…"
                 autocomplete="off"
+                spellcheck="false"
+                role="combobox"
+                aria-expanded="false"
+                aria-controls="autocomplete-list"
+                aria-autocomplete="list"
+                aria-label="Player name"
               />
-              <div id="autocomplete-list" class="autocomplete-items"></div>
+              <div id="autocomplete-list" class="autocomplete" role="listbox"></div>
             </div>
-            <div class="guess-counter">
-              Guess <span id="guess-count">0</span><span id="guess-max-part"> / <span id="guess-max">8</span></span>
+            <div class="guess-meta">
+              <div id="guess-pips" class="pips" aria-label="Guesses used"></div>
+              <span id="guess-count-text" class="guess-count-text"></span>
+              <button id="give-up-button" class="link-btn link-btn--danger"><i data-lucide="flag"></i> <span>Give up</span></button>
             </div>
           </div>
           <div class="hint-panel">
             <div class="hint-image-wrapper">
-              <img id="silhouette-img" alt="Silhouette" />
-              <img id="team-logo-img" alt="Team Logo" />
+              <img id="silhouette-img" alt="Mystery player silhouette" />
+              <img id="team-logo-img" alt="Mystery player's team logo" />
               <canvas id="silhouette-canvas"></canvas>
               <div id="silhouette-placeholder" class="hint-placeholder">
-                <span class="hint-icon"><i data-lucide="eye"></i></span>
+                <i data-lucide="eye-off"></i>
                 <span>Hint</span>
               </div>
             </div>
-            <button id="hint-button">Show Hint</button>
+            <button id="hint-button" class="btn btn--ghost btn--block"><i data-lucide="lightbulb"></i> <span>Show hint</span></button>
           </div>
-        </div>
+        </section>
 
-        <div class="board board--cards-mobile">
-          <div class="header-row" id="classic-header">
-            <div class="cell name-cell">Name</div>
-            <div class="cell">Team</div>
-            <div class="cell">Conf</div>
-            <div class="cell">Div</div>
-            <div class="cell">Pos</div>
-            <div class="cell">Ht</div>
-            <div class="cell">Age</div>
-            <div class="cell">#</div>
+        <div class="board">
+          <div class="board-head" id="classic-header">
+            <span class="head-name">Player</span>
+            <span>Team</span><span>Conf</span><span>Div</span><span>Pos</span><span>Ht</span><span>Age</span><span>#</span>
           </div>
-          <div class="header-row" id="stats-header" style="display: none">
-            <div class="cell name-cell">Name</div>
-            <div class="cell">Team</div>
-            <div class="cell">PTS</div>
-            <div class="cell">REB</div>
-            <div class="cell">AST</div>
-            <div class="cell">STL</div>
-            <div class="cell">BLK</div>
-            <div class="cell">3PM</div>
+          <div class="board-head" id="stats-header" style="display: none">
+            <span class="head-name">Player</span>
+            <span>Team</span><span>PTS</span><span>REB</span><span>AST</span><span>STL</span><span>BLK</span><span>3PM</span>
           </div>
-          <div id="guesses-container"></div>
+          <div id="guesses-container" class="guesses"></div>
         </div>
-      </div>
-
+      </main>
     </div>
 
-    <!-- Win / Result Modal -->
-    <div id="win-modal" class="modal-overlay">
-      <div class="modal-content">
-        <h2 id="win-title">You Got It!</h2>
-        <p id="win-subtitle" class="win-subtitle" style="display: none"></p>
-        <p><strong id="win-name" style="font-size: 22px"></strong></p>
-        <img id="headshot-img" src="" alt="Player" />
-        <div class="modal-btn-group">
-          <button class="btn-primary" id="vs-rematch-btn" style="display: none">Play Again</button>
-          <button class="btn-primary" id="play-again-btn">New Game</button>
+    <!-- Result modal -->
+    <div id="win-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="win-title">
+      <div class="modal result-modal">
+        <p class="result-kicker" id="win-kicker"></p>
+        <h2 id="win-title" class="result-title">You got it!</h2>
+        <div class="result-player">
+          <div class="result-photo" id="result-photo">
+            <img id="result-team-logo" class="result-team-logo" alt="" />
+            <img id="headshot-img" class="result-headshot" alt="Mystery player headshot" />
+          </div>
+          <strong id="win-name" class="result-name"></strong>
+          <span id="win-meta" class="result-meta"></span>
+        </div>
+        <p id="win-subtitle" class="result-sub"></p>
+        <div id="result-grid" class="result-grid" aria-hidden="true"></div>
+        <div id="result-stats" class="stat-row"></div>
+        <div class="modal-actions">
+          <button class="btn btn--ghost" id="share-btn"><i data-lucide="share-2"></i> <span>Share</span></button>
+          <button class="btn btn--primary" id="vs-rematch-btn" style="display: none">Play Again</button>
+          <button class="btn btn--primary" id="play-again-btn">New Game</button>
         </div>
       </div>
     </div>
 
-    <!-- Help Modal -->
-    <div id="help-modal" class="modal-overlay">
-      <div class="modal-content help-modal-content">
-        <h2 class="help-title">How to Play</h2>
+    <!-- Stats modal -->
+    <div id="stats-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="stats-title">
+      <div class="modal">
+        <button class="icon-btn modal-close" data-close aria-label="Close"><i data-lucide="x"></i></button>
+        <h2 id="stats-title" class="modal-title">Your stats</h2>
+        <div class="segmented" role="tablist">
+          <button class="segment is-active" data-stats-mode="classic" role="tab">Classic</button>
+          <button class="segment" data-stats-mode="stats" role="tab">Stats</button>
+        </div>
+        <div id="stats-summary" class="stat-row"></div>
+        <h3 class="modal-subtitle">Guess distribution</h3>
+        <div id="stats-dist" class="dist"></div>
+        <p class="modal-note">Solo games on this device.</p>
+      </div>
+    </div>
+
+    <!-- Help modal -->
+    <div id="help-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="help-title">
+      <div class="modal help-modal">
+        <button class="icon-btn modal-close" data-close aria-label="Close"><i data-lucide="x"></i></button>
+        <h2 id="help-title" class="modal-title">How to play</h2>
+        <p class="help-lead">Name the mystery NBA player. Each guess shows how close you are.</p>
         <div class="help-modes">
-          <div class="help-mode-block">
-            <div class="help-mode-header"><i data-lucide="layout-list"></i> Classic</div>
-            <p>
-              Clues reveal
-              <strong>Team, Conf, Div, Position, Height, Age,</strong> and
-              <strong>Jersey #</strong>.
-            </p>
+          <div class="help-mode">
+            <span class="help-mode-name"><i data-lucide="layout-list"></i> Classic</span>
+            <span>Team, conference, division, position, height, age and jersey number.</span>
           </div>
-          <div class="help-mode-block">
-            <div class="help-mode-header"><i data-lucide="bar-chart-2"></i> Stats</div>
-            <p>
-              Clues compare <strong>PTS, REB, AST, STL, BLK,</strong> and
-              <strong>3PM</strong> averages.
-            </p>
+          <div class="help-mode">
+            <span class="help-mode-name"><i data-lucide="bar-chart-2"></i> Stats</span>
+            <span>Points, rebounds, assists, steals, blocks and 3-pointers per game.</span>
           </div>
         </div>
         <div class="help-legend">
-          <div class="legend-heading">Color Guide</div>
-          <div class="legend-row">
-            <div class="legend-cell match"><div class="inner">LAL</div></div>
-            <span>Exact match</span>
-          </div>
-          <div class="legend-row">
-            <div class="legend-cell partial"><div class="inner">F-G</div></div>
-            <span>Partial match</span>
-          </div>
-          <div class="legend-row">
-            <div class="legend-cell nomatch"><div class="inner">BOS</div></div>
-            <span>No match</span>
-          </div>
-          <div class="legend-row">
-            <span class="arrow-example">▲ ▼</span
-            ><span>Target is higher ▲ or lower ▼</span>
-          </div>
+          <div class="legend-item"><span class="tile tile--demo match"><span class="tile-value">LAL</span></span><span>Exact match</span></div>
+          <div class="legend-item"><span class="tile tile--demo partial"><span class="tile-value">6'8"<span class="tile-arrow">▲</span></span></span><span>Close: within 2 (or 1.0 / 0.5 for stats); position shares a letter</span></div>
+          <div class="legend-item"><span class="tile tile--demo nomatch"><span class="tile-value">BOS</span></span><span>No match</span></div>
+          <div class="legend-item"><span class="legend-arrows">▲ ▼</span><span>The answer is higher ▲ or lower ▼</span></div>
         </div>
-        <div class="help-extras">
-          <p>
-            <i data-lucide="lightbulb"></i> <strong>Show Hint</strong> — silhouette (Classic) or team logo
-            (Stats).
-          </p>
-          <p>
-            <i data-lucide="star"></i> <strong>Starters Only</strong> — limits pool to impact players.
-          </p>
-          <p><i data-lucide="crosshair"></i> Solo: <strong>8 guesses</strong>. Versus: <strong>unlimited</strong> — first to guess right wins!</p>
-        </div>
-        <button class="btn-primary" id="help-close-btn">Got It!</button>
+        <ul class="help-extras">
+          <li><i data-lucide="lightbulb"></i> <strong>Hint:</strong> a silhouette (Classic) or team logo (Stats).</li>
+          <li><i data-lucide="star"></i> <strong>Starters:</strong> only impact players can be the answer.</li>
+          <li><i data-lucide="crosshair"></i> Solo: 8 guesses. Versus: unlimited, first to guess right wins.</li>
+        </ul>
+        <button class="btn btn--primary btn--wide" data-close>Got it</button>
       </div>
     </div>
+
+    <!-- Confirm modal -->
+    <div id="confirm-modal" class="modal-overlay" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title">
+      <div class="modal confirm-modal">
+        <h2 id="confirm-title" class="modal-title">Give up?</h2>
+        <p id="confirm-text" class="modal-text"></p>
+        <div class="modal-actions">
+          <button class="btn btn--ghost" id="confirm-cancel">Keep playing</button>
+          <button class="btn btn--danger" id="confirm-ok">Give up</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
     <!-- On-screen keyboard -->
     <div id="onscreen-keyboard" class="osk">
@@ -339,11 +404,11 @@
         <button class="osk-key" data-char="N">N</button>
         <button class="osk-key" data-char="M">M</button>
         <button class="osk-key osk-key--special" data-char=".">.</button>
-        <button class="osk-key osk-key--back" id="osk-backspace">⌫</button>
+        <button class="osk-key osk-key--back" id="osk-backspace" aria-label="Backspace">⌫</button>
       </div>
       <div class="osk-row osk-row--bottom">
-        <button class="osk-key osk-key--space" data-char=" ">SPACE</button>
-        <button class="osk-key osk-key--enter" id="osk-enter">ENTER</button>
+        <button class="osk-key osk-key--space" data-char=" ">Space</button>
+        <button class="osk-key osk-key--enter" id="osk-enter">Enter</button>
       </div>
     </div>
 

@@ -1,7 +1,7 @@
 // src/index.js
 // Static files in public/ are served by Workers Static Assets; only /api/* runs here.
 
-import { canBeTarget, teamLogoUrl } from "../public/js/compare.js";
+import { TEAM_LOGO_IDS, canBeTarget, teamLogoUrl } from "../public/js/compare.js";
 
 export { VsRoom } from "./vs-room.js";
 
@@ -55,6 +55,24 @@ async function proxyHeadshot(playerId) {
     headers: {
       "Content-Type": "image/png",
       "Cache-Control": "public, max-age=86400",
+    },
+  });
+}
+
+async function proxyLogo(abbr) {
+  const id = TEAM_LOGO_IDS[abbr];
+  if (!id) return new Response("Not found", { status: 404 });
+  const upstream = await fetch(`https://cdn.nba.com/logos/nba/${id}/global/L/logo.svg`, {
+    cf: { cacheTtl: 604800, cacheEverything: true },
+  });
+  if (!upstream.ok) return new Response("Not found", { status: 404 });
+  return new Response(upstream.body, {
+    headers: {
+      "Content-Type": "image/svg+xml",
+      "Cache-Control": "public, max-age=604800",
+      // Third-party SVG on our origin: never let it run scripts if opened directly
+      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'",
+      "X-Content-Type-Options": "nosniff",
     },
   });
 }
@@ -163,6 +181,9 @@ export default {
         return /^\d+$/.test(parts[2] || "")
           ? proxyHeadshot(parts[2])
           : json({ error: "Bad player id" }, 400);
+      }
+      if (parts[1] === "logo" && request.method === "GET") {
+        return proxyLogo(String(parts[2] || "").toUpperCase());
       }
       if (parts[1] === "vs") return await handleVs(request, env, url, parts.slice(2));
     } catch (e) {

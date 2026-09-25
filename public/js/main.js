@@ -37,6 +37,10 @@ let vsStartersOnly = false;
 
 // Touch detection
 const IS_TOUCH = navigator.maxTouchPoints > 0 || "ontouchstart" in window;
+// A touch-capable *desktop* (touchscreen laptop, Surface, Chromebook) has a real
+// keyboard too, so the custom on-screen keyboard should only take over on a
+// phone-sized, coarse-pointer viewport — not just because touch is present.
+const SHOW_OSK = IS_TOUCH && matchMedia("(max-width: 768px) and (pointer: coarse)").matches;
 const REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 // All screen IDs — only one shown at a time
@@ -110,12 +114,23 @@ function toast(message) {
   toastTimer = setTimeout(() => el.classList.remove("is-visible"), 1800);
 }
 
+// Moving focus into the dialog on open is what makes screen readers announce its
+// aria-labelledby text (e.g. "You got it!"); without it, role="dialog" is inert.
+let modalLastFocused = null;
 function openModal(el) {
+  modalLastFocused = document.activeElement;
   el.style.display = "flex";
+  const target = el.querySelector("h2") || el;
+  if (!target.hasAttribute("tabindex")) target.setAttribute("tabindex", "-1");
+  target.focus({ preventScroll: true });
 }
 
 function closeModal(el) {
   el.style.display = "none";
+  if (modalLastFocused && document.body.contains(modalLastFocused) && !modalLastFocused.disabled) {
+    modalLastFocused.focus({ preventScroll: true });
+  }
+  modalLastFocused = null;
 }
 
 function setupModals() {
@@ -263,7 +278,7 @@ async function fetchPlayers(skipTargetSelect = false) {
     await loadTargetImages();
   }
   loader.style.display = "none";
-  if (!skipTargetSelect && !IS_TOUCH) $("player-input").focus();
+  if (!skipTargetSelect && !SHOW_OSK) $("player-input").focus();
 }
 
 // Headshots are proxied through our own origin: cdn.nba.com sends no CORS
@@ -718,8 +733,13 @@ function choosePlayer(p) {
 
 // Enter (keyboard or on-screen): the highlighted suggestion, else an exact name
 function submitCurrent() {
-  const p = activeIndex >= 0 ? suggestions[activeIndex] : findPlayerByName($("player-input").value);
-  if (p) choosePlayer(p);
+  const input = $("player-input");
+  const p = activeIndex >= 0 ? suggestions[activeIndex] : findPlayerByName(input.value);
+  if (p) {
+    choosePlayer(p);
+  } else if (input.value.trim()) {
+    toast("No player matches that name");
+  }
 }
 
 function setupAutocomplete() {
@@ -848,7 +868,7 @@ function exitVsGameUi() {
 
 // ── OSK helpers ────────────────────────────────────────────────
 function showOsk() {
-  if (!IS_TOUCH) return;
+  if (!SHOW_OSK) return;
   $("onscreen-keyboard").classList.add("osk--visible");
   document.body.classList.add("osk-open");
 }
@@ -904,7 +924,7 @@ function setupVersusLobby() {
     $("join-game-submit-btn").disabled = false;
     $("join-game-submit-btn").textContent = "Join Game";
     showScreen("versus-join-screen");
-    if (!IS_TOUCH) $("pin-input").focus();
+    if (!SHOW_OSK) $("pin-input").focus();
   });
 }
 
@@ -1250,7 +1270,19 @@ function resetVsState() {
 
 // ── Back button ────────────────────────────────────────────────
 function setupBackButton() {
-  $("back-button").addEventListener("click", () => {
+  $("back-button").addEventListener("click", async () => {
+    // Only ask when there's an active, unfinished run to lose
+    if (!gameOver && guessedIds.size > 0) {
+      const ok = await confirmAction({
+        title: "Leave this game?",
+        text: vsMode
+          ? "You'll leave the match. Your opponent can keep playing without you."
+          : "Your progress on this player won't be saved.",
+        ok: "Leave",
+      });
+      if (!ok) return;
+    }
+
     closeModal($("win-modal"));
     resetHintVisuals();
     hideOsk();
@@ -1288,7 +1320,7 @@ function setupPlayAgain() {
     resetRound();
     targetPlayer = pickSoloTarget();
     await loadTargetImages();
-    if (!IS_TOUCH) $("player-input").focus();
+    if (!SHOW_OSK) $("player-input").focus();
     showOsk();
   });
 }
@@ -1341,13 +1373,13 @@ function setupStarterToggle() {
     resetRound();
     await fetchPlayers();
     toast(startersOnly ? "Starters only: new player picked" : "All players: new player picked");
-    if (IS_TOUCH) showOsk();
+    if (SHOW_OSK) showOsk();
   });
 }
 
 // ── On-screen keyboard ─────────────────────────────────────────
 function setupOnscreenKeyboard() {
-  if (!IS_TOUCH) return;
+  if (!SHOW_OSK) return;
 
   const keyboard = $("onscreen-keyboard");
   const input = $("player-input");

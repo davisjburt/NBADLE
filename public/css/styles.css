@@ -120,7 +120,7 @@ svg.lucide {
 
 .brand--hero {
   font-size: clamp(3.4rem, 17vw, 7rem);
-  text-shadow: 0 0 40px rgba(255, 107, 26, 0.35);
+  text-shadow: 0 0 16px rgba(255, 107, 26, 0.18);
 }
 
 .brand--sm {
@@ -470,7 +470,7 @@ svg.lucide {
   background: #070b14;
   border: 1px solid var(--line-strong);
   color: var(--accent);
-  text-shadow: 0 0 18px rgba(255, 107, 26, 0.55);
+  text-shadow: 0 0 8px rgba(255, 107, 26, 0.3);
   font-variant-numeric: tabular-nums;
 }
 
@@ -614,7 +614,7 @@ svg.lucide {
   font-size: 2rem;
   line-height: 1;
   color: var(--accent);
-  text-shadow: 0 0 14px rgba(255, 107, 26, 0.45);
+  text-shadow: 0 0 6px rgba(255, 107, 26, 0.25);
   font-variant-numeric: tabular-nums;
 }
 .score--opp .score-value {
@@ -1332,7 +1332,7 @@ svg.lucide {
   font-variant-numeric: tabular-nums;
 }
 .stat-label {
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;

@@ -723,8 +723,10 @@ async function applyVsState(state) {
   if (!state) return;
   const mine = vsRole === "host" ? state.host_guess_count : state.challenger_guess_count;
   const theirs = vsRole === "host" ? state.challenger_guess_count : state.host_guess_count;
+  // Counts only rise within a round (startVsGame resets them), and snapshots can
+  // arrive out of order, so never let an older one move either count backwards.
   guessCount = Math.max(guessCount, mine || 0);
-  vsOpponentGuessCount = theirs || 0;
+  vsOpponentGuessCount = Math.max(vsOpponentGuessCount, theirs || 0);
   updateGuessCounter();
   document.getElementById("vs-your-guesses").textContent = guessCount;
   document.getElementById("vs-opponent-guesses").textContent = vsOpponentGuessCount;

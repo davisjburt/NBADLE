@@ -809,10 +809,13 @@ async function generateSilhouette(url) {
   const ctx = canvas.getContext("2d");
   return new Promise((res) => {
     img.onload = () => {
-      canvas.width = 200;
-      canvas.height = 190;
-      ctx.drawImage(img, 0, 0, 200, 190);
-      const d = ctx.getImageData(0, 0, 200, 190),
+      // Draw at the source image's own size (headshots aren't square — the NBA's
+      // are 260x190) so nothing gets stretched here; object-fit: contain on
+      // #silhouette-img handles fitting it into the hint box without distorting it.
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      ctx.drawImage(img, 0, 0);
+      const d = ctx.getImageData(0, 0, canvas.width, canvas.height),
         px = d.data;
       for (let i = 0; i < px.length; i += 4)
         if (px[i + 3] > 0) {

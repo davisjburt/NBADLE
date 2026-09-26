@@ -4,14 +4,14 @@
    ============================================================ */
 
 :root {
-  --bg: #0b1220;
-  --surface: #121a2b;
-  --surface-2: #1a2438;
-  --surface-3: #232f47;
+  --bg: #161616;
+  --surface: #1e1e1e;
+  --surface-2: #292929;
+  --surface-3: #353535;
   --line: rgba(255, 255, 255, 0.08);
   --line-strong: rgba(255, 255, 255, 0.16);
-  --text: #e8edf5;
-  --muted: #8a96ab;
+  --text: #eeeeee;
+  --muted: #9a9a9a;
   --accent: #ff6b1a;
   --accent-hover: #ff7f38;
   --on-accent: #1a1204;
@@ -20,8 +20,8 @@
   --on-match: #ffffff;
   --partial: #f59e0b;
   --on-partial: #1a1204;
-  --miss: #2a3447;
-  --on-miss: #c7d0de;
+  --miss: #383838;
+  --on-miss: #d2d2d2;
   --danger: #ef4444;
 
   --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
@@ -461,7 +461,7 @@ svg.lucide {
   letter-spacing: 0.14em;
   padding: 8px 18px 8px 26px;
   border-radius: var(--radius);
-  background: #070b14;
+  background: #0e0e0e;
   border: 1px solid var(--line-strong);
   color: var(--accent);
   font-variant-numeric: tabular-nums;
@@ -507,11 +507,11 @@ svg.lucide {
   padding: 10px 12px 10px 20px;
   border-radius: var(--radius);
   border: 1px solid var(--line-strong);
-  background: #070b14;
+  background: #0e0e0e;
   color: var(--accent);
 }
 .pin-input::placeholder {
-  color: rgba(138, 150, 171, 0.35);
+  color: rgba(154, 154, 154, 0.35);
 }
 .pin-input:focus {
   outline: none;
@@ -580,7 +580,7 @@ svg.lucide {
   margin-bottom: 14px;
   padding: 10px 16px;
   border-radius: var(--radius);
-  background: #070b14;
+  background: #0e0e0e;
   border: 1px solid var(--line-strong);
 }
 
@@ -808,7 +808,7 @@ svg.lucide {
   height: 150px;
   border-radius: var(--radius);
   overflow: hidden;
-  background: #e9edf3;
+  background: #eeeeee;
 }
 .hint-panel.is-revealed .hint-image-wrapper {
   display: block;
@@ -839,7 +839,7 @@ svg.lucide {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  color: #64748b;
+  color: #787878;
   font-family: var(--font-display);
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -999,7 +999,7 @@ svg.lucide {
   animation: none;
 }
 .guess-row.is-ghost .guess-name {
-  color: rgba(138, 150, 171, 0.35);
+  color: rgba(154, 154, 154, 0.35);
 }
 
 @keyframes tileFlip {
@@ -1102,7 +1102,7 @@ svg.lucide {
   align-items: center;
   justify-content: center;
   padding: 16px;
-  background: rgba(3, 6, 12, 0.72);
+  background: rgba(7, 7, 7, 0.72);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
 }
@@ -1499,7 +1499,7 @@ svg.lucide {
   flex-direction: column;
   gap: 6px;
   padding: 8px 4px max(10px, env(safe-area-inset-bottom));
-  background: rgba(7, 11, 20, 0.96);
+  background: rgba(14, 14, 14, 0.96);
   border-top: 1px solid var(--line-strong);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -1542,7 +1542,7 @@ body.osk-open {
 }
 .osk-key:active,
 .osk-key.osk-key--pressed {
-  background: #34425f;
+  background: #4a4a4a;
   transform: scale(0.95);
 }
 

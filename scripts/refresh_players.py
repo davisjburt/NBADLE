@@ -238,7 +238,10 @@ def main():
     for p in players:
         s = stats.get(p["id"], zero)
         p.update({k: round(float(s[k]), 1) for k in STAT_KEYS})
-        p["is_starter"] = is_starter(p)
+        # A player with no recorded averages at all (a new draftee, most often)
+        # would never clear the stat-based bar below and would quietly vanish
+        # from Starters Only. Count them as a starter until real numbers come in.
+        p["is_starter"] = True if not any(p[k] for k in STAT_KEYS) else is_starter(p)
     no_stats = sum(1 for p in players if not any(p[k] for k in STAT_KEYS))
 
     players.sort(key=lambda p: p["name"])

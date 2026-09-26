@@ -5,7 +5,6 @@
 
 :root {
   --bg: #0b1220;
-  --bg-glow: #16223a;
   --surface: #121a2b;
   --surface-2: #1a2438;
   --surface-3: #232f47;
@@ -51,10 +50,6 @@ body {
   font-family: var(--font-body);
   color: var(--text);
   background-color: var(--bg);
-  background-image:
-    radial-gradient(ellipse 80% 50% at 50% -10%, var(--bg-glow), transparent 70%),
-    radial-gradient(circle at 50% 120%, rgba(255, 107, 26, 0.08), transparent 45%);
-  background-attachment: fixed;
   padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
     max(32px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
   display: flex;
@@ -120,7 +115,6 @@ svg.lucide {
 
 .brand--hero {
   font-size: clamp(3.4rem, 17vw, 7rem);
-  text-shadow: 0 0 16px rgba(255, 107, 26, 0.18);
 }
 
 .brand--sm {
@@ -298,7 +292,7 @@ svg.lucide {
   text-align: left;
   border-radius: var(--radius-lg);
   border: 1px solid var(--line);
-  background: linear-gradient(180deg, var(--surface-2), var(--surface));
+  background: var(--surface);
   transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
 }
 .mode-card:hover {
@@ -470,7 +464,6 @@ svg.lucide {
   background: #070b14;
   border: 1px solid var(--line-strong);
   color: var(--accent);
-  text-shadow: 0 0 8px rgba(255, 107, 26, 0.3);
   font-variant-numeric: tabular-nums;
 }
 
@@ -614,12 +607,10 @@ svg.lucide {
   font-size: 2rem;
   line-height: 1;
   color: var(--accent);
-  text-shadow: 0 0 6px rgba(255, 107, 26, 0.25);
   font-variant-numeric: tabular-nums;
 }
 .score--opp .score-value {
   color: var(--text);
-  text-shadow: none;
 }
 
 .score-mid {
@@ -817,7 +808,7 @@ svg.lucide {
   height: 150px;
   border-radius: var(--radius);
   overflow: hidden;
-  background: radial-gradient(circle at 50% 35%, #f4f6fa, #c9d2e0);
+  background: #e9edf3;
 }
 .hint-panel.is-revealed .hint-image-wrapper {
   display: block;
@@ -1236,7 +1227,7 @@ svg.lucide {
   margin-bottom: 6px;
   border-radius: var(--radius);
   overflow: hidden;
-  background: radial-gradient(circle at 50% 30%, var(--surface-3), var(--surface-2));
+  background: var(--surface-2);
   border: 1px solid var(--line);
 }
 .result-team-logo {

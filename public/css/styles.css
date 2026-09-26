@@ -115,7 +115,6 @@ svg.lucide {
 
 .brand--hero {
   font-size: clamp(3.4rem, 17vw, 7rem);
-  text-shadow: 0 0 16px rgba(255, 107, 26, 0.18);
 }
 
 .brand--sm {
@@ -465,7 +464,6 @@ svg.lucide {
   background: #070b14;
   border: 1px solid var(--line-strong);
   color: var(--accent);
-  text-shadow: 0 0 8px rgba(255, 107, 26, 0.3);
   font-variant-numeric: tabular-nums;
 }
 
@@ -609,12 +607,10 @@ svg.lucide {
   font-size: 2rem;
   line-height: 1;
   color: var(--accent);
-  text-shadow: 0 0 6px rgba(255, 107, 26, 0.25);
   font-variant-numeric: tabular-nums;
 }
 .score--opp .score-value {
   color: var(--text);
-  text-shadow: none;
 }
 
 .score-mid {

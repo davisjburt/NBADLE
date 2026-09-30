@@ -71,6 +71,20 @@ const CELL_LABELS = {
 
 const STATUS_TEXT = { match: "correct", partial: "close", nomatch: "no match" };
 
+// Division names are useful context on larger boards, but a phone tile is only
+// about 40px wide. Keep the full name in the tile's accessible label and use a
+// conventional compact code only for the mobile visual treatment.
+const DIVISION_CODES = {
+  Atlantic: "ATL",
+  Central: "CEN",
+  Southeast: "SE",
+  Pacific: "PAC",
+  Northwest: "NW",
+  Southwest: "SW",
+  NW: "NW",
+  SW: "SW",
+};
+
 const $ = (id) => document.getElementById(id);
 
 // ── Screen manager ─────────────────────────────────────────────
@@ -399,7 +413,10 @@ function renderRow(row, number) {
 function renderTile(col, cell, index) {
   const status = cell?.status || "nomatch";
   const tile = document.createElement("div");
-  tile.className = `tile ${status}` + (col === "team" ? " tile--team" : "");
+  tile.className =
+    `tile ${status}` +
+    (col === "team" ? " tile--team" : "") +
+    (col === "div" ? " tile--division" : "");
   tile.style.setProperty("--i", index);
 
   const arrow = (cell?.arrow || "").trim();
@@ -415,6 +432,7 @@ function renderTile(col, cell, index) {
   const value = document.createElement("span");
   value.className = "tile-value";
   value.setAttribute("aria-hidden", "true");
+  if (col === "div") value.dataset.compactValue = DIVISION_CODES[cell?.val] || cell?.val || "—";
   if (col === "team") {
     const logo = teamLogoUrl(cell?.val);
     if (logo) {

@@ -1581,11 +1581,15 @@ body.osk-open {
    SMALL PHONES
    ============================================================ */
 @media (max-width: 767px) {
-  /* The fixed phone keyboard covers the lower board. Placeholder rows only
-     repeat information already shown in the guess counter, so hide them while
-     typing instead of leaving a stack of half-obscured empty cards. */
-  body.osk-open .guess-row.is-ghost {
-    display: none;
+  /* Full division names overflow a seven-column phone board. The full name is
+     retained in the tile's accessible label; this only swaps the visual text
+     for its conventional short code (Southeast → SE, Pacific → PAC, etc.). */
+  .tile--division .tile-value {
+    font-size: 0;
+  }
+  .tile--division .tile-value::before {
+    content: attr(data-compact-value);
+    font-size: 0.95rem;
   }
 
   /* Tiles are ~45px wide here: tuck the arrow into the corner so values like

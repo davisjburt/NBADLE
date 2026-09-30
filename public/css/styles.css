@@ -1581,6 +1581,13 @@ body.osk-open {
    SMALL PHONES
    ============================================================ */
 @media (max-width: 767px) {
+  /* The fixed phone keyboard covers the lower board. Placeholder rows only
+     repeat information already shown in the guess counter, so hide them while
+     typing instead of leaving a stack of half-obscured empty cards. */
+  body.osk-open .guess-row.is-ghost {
+    display: none;
+  }
+
   /* Tiles are ~45px wide here: tuck the arrow into the corner so values like
      6'11" keep the full width */
   .tile-arrow {

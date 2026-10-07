@@ -19,3 +19,7 @@ venv/
 /data_cache.py
 /test_bio_direct.py
 /test_nba_bio.py
+
+# Local tooling
+.claude/
+.impeccable/

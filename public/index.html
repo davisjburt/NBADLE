@@ -4,6 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#161616" />
+    <script>
+      // Apply the saved theme before first paint so light-mode users never see a dark
+      // flash. Keep the storage key in sync with THEME_STORAGE_KEY in js/main.js.
+      try {
+        if (localStorage.getItem("nbadle_theme") === "light") {
+          document.documentElement.dataset.theme = "light";
+          document.querySelector('meta[name="theme-color"]').setAttribute("content", "#f6f3ee");
+        }
+      } catch (e) {}
+    </script>
     <title>NBADLE</title>
     <meta
       name="description"
@@ -23,6 +33,7 @@
 
       <!-- ── LANDING ──────────────────────────────────────────── -->
       <main id="landing-screen" class="screen screen--landing">
+        <button class="icon-btn theme-toggle theme-toggle--corner" type="button" aria-label="Light mode" aria-pressed="false" title="Light mode"><i data-lucide="moon"></i></button>
         <div class="hero">
           <div class="brand brand--hero" aria-label="NBADLE">
             <svg class="brand-ball" viewBox="0 0 40 40" aria-hidden="true">
@@ -59,7 +70,7 @@
         <div class="screen-bar">
           <button class="icon-btn" id="solo-back-btn" aria-label="Back"><i data-lucide="chevron-left"></i></button>
           <span class="brand brand--sm"><span class="brand-word">NBADLE</span></span>
-          <span class="screen-bar-spacer"></span>
+          <button class="icon-btn theme-toggle" type="button" aria-label="Light mode" aria-pressed="false" title="Light mode"><i data-lucide="moon"></i></button>
         </div>
         <h2 class="screen-title">Choose your mode</h2>
         <div class="mode-grid">
@@ -87,7 +98,7 @@
         <div class="screen-bar">
           <button class="icon-btn" id="versus-back-btn" aria-label="Back"><i data-lucide="chevron-left"></i></button>
           <span class="brand brand--sm"><span class="brand-word">NBADLE</span></span>
-          <span class="screen-bar-spacer"></span>
+          <button class="icon-btn theme-toggle" type="button" aria-label="Light mode" aria-pressed="false" title="Light mode"><i data-lucide="moon"></i></button>
         </div>
         <h2 class="screen-title">Versus</h2>
         <p class="screen-sub">Same mystery player, unlimited guesses. First to name them wins.</p>
@@ -118,7 +129,7 @@
           <div class="screen-bar">
             <button class="icon-btn" id="vs-create-back-btn" aria-label="Back"><i data-lucide="chevron-left"></i></button>
             <span class="brand brand--sm"><span class="brand-word">NBADLE</span></span>
-            <span class="screen-bar-spacer"></span>
+            <button class="icon-btn theme-toggle" type="button" aria-label="Light mode" aria-pressed="false" title="Light mode"><i data-lucide="moon"></i></button>
           </div>
           <h2 class="screen-title">Choose game mode</h2>
           <label class="toggle-row">
@@ -156,7 +167,7 @@
           <div class="screen-bar">
             <button class="icon-btn" id="cancel-vs-btn" aria-label="Cancel"><i data-lucide="x"></i></button>
             <span class="brand brand--sm"><span class="brand-word">NBADLE</span></span>
-            <span class="screen-bar-spacer"></span>
+            <button class="icon-btn theme-toggle" type="button" aria-label="Light mode" aria-pressed="false" title="Light mode"><i data-lucide="moon"></i></button>
           </div>
           <div class="pin-panel">
             <p class="pin-caption">Share this PIN with your opponent</p>
@@ -172,7 +183,7 @@
         <div class="screen-bar">
           <button class="icon-btn" id="vs-join-back-btn" aria-label="Back"><i data-lucide="chevron-left"></i></button>
           <span class="brand brand--sm"><span class="brand-word">NBADLE</span></span>
-          <span class="screen-bar-spacer"></span>
+          <button class="icon-btn theme-toggle" type="button" aria-label="Light mode" aria-pressed="false" title="Light mode"><i data-lucide="moon"></i></button>
         </div>
         <h2 class="screen-title">Enter game PIN</h2>
         <div class="pin-panel">
@@ -209,7 +220,7 @@
               <span class="filter-label">Starters</span>
             </label>
             <button id="stats-button" class="icon-btn" aria-label="Your stats"><i data-lucide="bar-chart-2"></i></button>
-            <button id="theme-toggle" class="icon-btn" type="button" aria-label="Light mode" aria-pressed="false" title="Light mode"><i data-lucide="moon"></i></button>
+            <button class="icon-btn theme-toggle" type="button" aria-label="Light mode" aria-pressed="false" title="Light mode"><i data-lucide="moon"></i></button>
             <button id="help-button" class="icon-btn" aria-label="How to play"><i data-lucide="circle-help"></i></button>
           </div>
         </header>

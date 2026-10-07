@@ -162,6 +162,7 @@ svg.lucide {
 }
 
 .screen--landing {
+  position: relative;
   min-height: calc(100dvh - 60px);
   display: flex;
   flex-direction: column;
@@ -182,6 +183,12 @@ svg.lucide {
   margin: 0;
   color: var(--muted);
   font-size: 1rem;
+}
+
+.theme-toggle--corner {
+  position: absolute;
+  top: 8px;
+  right: 0;
 }
 
 .screen-bar {
@@ -232,7 +239,7 @@ svg.lucide {
   border-color: var(--line-strong);
 }
 
-#theme-toggle[aria-pressed="true"] {
+.theme-toggle[aria-pressed="true"] {
   color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 40%, var(--line-strong));
 }

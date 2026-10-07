@@ -78,12 +78,14 @@ const THEME_STORAGE_KEY = "nbadle_theme";
 
 function setTheme(theme) {
   const isLight = theme === "light";
-  const toggle = $("theme-toggle");
 
   document.documentElement.dataset.theme = isLight ? "light" : "dark";
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", isLight ? "#f6f3ee" : "#161616");
-  toggle.setAttribute("aria-pressed", String(isLight));
-  toggle.innerHTML = `<i data-lucide="${isLight ? "sun" : "moon"}"></i>`;
+  // There's one toggle per screen; keep them all in step
+  document.querySelectorAll(".theme-toggle").forEach((toggle) => {
+    toggle.setAttribute("aria-pressed", String(isLight));
+    toggle.innerHTML = `<i data-lucide="${isLight ? "sun" : "moon"}"></i>`;
+  });
   if (typeof lucide !== "undefined") lucide.createIcons();
 
   try {
@@ -101,8 +103,10 @@ function setupThemeToggle() {
     // Keep the existing dark theme if storage is unavailable.
   }
   setTheme(savedTheme);
-  $("theme-toggle").addEventListener("click", () => {
-    setTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light");
+  document.querySelectorAll(".theme-toggle").forEach((toggle) => {
+    toggle.addEventListener("click", () => {
+      setTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light");
+    });
   });
 }
 

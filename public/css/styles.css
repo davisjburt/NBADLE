@@ -26,6 +26,9 @@
   --input-surface: #0e0e0e;
   --overlay: rgba(7, 7, 7, 0.72);
   --keyboard-surface: rgba(14, 14, 14, 0.96);
+  --result-win: #4ade80;
+  --result-loss: #f87171;
+  --error-text: #fca5a5;
 
   --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
   --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -57,6 +60,10 @@
   --input-surface: #f7f3ed;
   --overlay: rgba(36, 27, 20, 0.5);
   --keyboard-surface: rgba(246, 243, 238, 0.96);
+  /* The dark theme's pastels are unreadable on white (1.7-2.8:1); these pass AA */
+  --result-win: #15803d;
+  --result-loss: #b91c1c;
+  --error-text: #b91c1c;
   --shadow: 0 10px 30px rgba(70, 49, 28, 0.15);
 }
 
@@ -201,6 +208,7 @@ svg.lucide {
 }
 
 .screen--landing {
+  position: relative;
   min-height: calc(100dvh - 60px);
   display: flex;
   flex-direction: column;
@@ -221,6 +229,12 @@ svg.lucide {
   margin: 0;
   color: var(--muted);
   font-size: 1rem;
+}
+
+.theme-toggle--corner {
+  position: absolute;
+  top: 8px;
+  right: 0;
 }
 
 .screen-bar {
@@ -271,7 +285,7 @@ svg.lucide {
   border-color: var(--line-strong);
 }
 
-#theme-toggle[aria-pressed="true"] {
+.theme-toggle[aria-pressed="true"] {
   color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 40%, var(--line-strong));
 }
@@ -597,7 +611,7 @@ svg.lucide {
 
 .form-error {
   margin: 0;
-  color: #fca5a5;
+  color: var(--error-text);
   font-size: 0.9rem;
 }
 
@@ -1284,10 +1298,10 @@ svg.lucide {
   text-transform: uppercase;
 }
 .result-title.is-win {
-  color: #4ade80;
+  color: var(--result-win);
 }
 .result-title.is-loss {
-  color: #f87171;
+  color: var(--result-loss);
 }
 
 .result-player {

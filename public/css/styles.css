@@ -133,6 +133,12 @@ svg.lucide {
   letter-spacing: 0.02em;
   color: var(--accent);
   line-height: 1;
+/* Modal headings take programmatic focus for screen readers; they aren't interactive */
+.modal h2[tabindex="-1"]:focus,
+.modal h2[tabindex="-1"]:focus-visible {
+  outline: none;
+}
+
 }
 
 .brand-ball {
@@ -1626,6 +1632,17 @@ body.osk-open {
    SMALL PHONES
    ============================================================ */
 @media (max-width: 767px) {
+  /* Full division names overflow a seven-column phone board. The full name is
+     retained in the tile's accessible label; this only swaps the visual text
+     for its conventional short code (Southeast → SE, Pacific → PAC, etc.). */
+  .tile--division .tile-value {
+    font-size: 0;
+  }
+  .tile--division .tile-value::before {
+    content: attr(data-compact-value);
+    font-size: 0.95rem;
+  }
+
   /* Tiles are ~45px wide here: tuck the arrow into the corner so values like
      6'11" keep the full width */
   .tile-arrow {

@@ -100,6 +100,12 @@ svg.lucide {
   letter-spacing: 0.02em;
   color: var(--accent);
   line-height: 1;
+/* Modal headings take programmatic focus for screen readers; they aren't interactive */
+.modal h2[tabindex="-1"]:focus,
+.modal h2[tabindex="-1"]:focus-visible {
+  outline: none;
+}
+
 }
 
 .brand-ball {

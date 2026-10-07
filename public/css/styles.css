@@ -107,6 +107,12 @@ button {
   outline-offset: 2px;
 }
 
+/* Modal headings take programmatic focus for screen readers; they aren't interactive */
+.modal h2[tabindex="-1"]:focus,
+.modal h2[tabindex="-1"]:focus-visible {
+  outline: none;
+}
+
 [data-lucide],
 svg.lucide {
   width: 1.1em;
@@ -117,6 +123,46 @@ svg.lucide {
 .app {
   width: 100%;
   max-width: 1040px;
+}
+
+/* ============================================================
+   AD RAILS (desktop only; fixed beside the centered 1040px app)
+   ============================================================ */
+.ad-rail {
+  display: none;
+}
+
+@media (min-width: 1400px) {
+  .ad-rail {
+    display: block;
+    position: fixed;
+    top: 24px;
+    width: 160px;
+  }
+
+  .ad-rail--left {
+    right: calc(50% + 520px + 20px);
+  }
+
+  .ad-rail--right {
+    left: calc(50% + 520px + 20px);
+  }
+}
+
+.ad-slot {
+  width: 160px;
+  height: 600px;
+  max-height: calc(100dvh - 48px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 /* ============================================================
@@ -133,12 +179,6 @@ svg.lucide {
   letter-spacing: 0.02em;
   color: var(--accent);
   line-height: 1;
-/* Modal headings take programmatic focus for screen readers; they aren't interactive */
-.modal h2[tabindex="-1"]:focus,
-.modal h2[tabindex="-1"]:focus-visible {
-  outline: none;
-}
-
 }
 
 .brand-ball {

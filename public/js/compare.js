@@ -64,9 +64,11 @@ function statCell(g, t, thresh) {
 
 const STAT_KEYS = ["pts", "reb", "ast", "stl", "blk", "fg3m"];
 
-// Players without season averages yet (e.g. rookies) can't be a Stats-mode target.
+// A Classic target needs both numeric directional clues; otherwise height or jersey
+// number comparisons cannot show the higher/lower arrow.
 export function canBeTarget(player, mode) {
-  return mode !== "stats" || STAT_KEYS.some((k) => Number(player[k]) > 0);
+  if (mode === "stats") return STAT_KEYS.some((k) => Number(player[k]) > 0);
+  return parseHeight(player.height) != null && player.number != null && Number.isFinite(Number(player.number));
 }
 
 export const COLUMNS = {

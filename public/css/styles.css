@@ -23,6 +23,9 @@
   --miss: #383838;
   --on-miss: #d2d2d2;
   --danger: #ef4444;
+  --input-surface: #0e0e0e;
+  --overlay: rgba(7, 7, 7, 0.72);
+  --keyboard-surface: rgba(14, 14, 14, 0.96);
 
   --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
   --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -32,6 +35,29 @@
   --radius-lg: 16px;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   --reveal-step: 90ms;
+}
+
+:root[data-theme="light"] {
+  --bg: #f6f3ee;
+  --surface: #ffffff;
+  --surface-2: #f0ece5;
+  --surface-3: #e5ded5;
+  --line: rgba(65, 47, 30, 0.12);
+  --line-strong: rgba(65, 47, 30, 0.22);
+  --text: #241b14;
+  --muted: #6b6259;
+  --accent: #d9520c;
+  --accent-hover: #b93e00;
+  --on-accent: #fffaf5;
+  --match: #167843;
+  --partial: #c98009;
+  --miss: #d8d1c8;
+  --on-miss: #3d332a;
+  --danger: #c73b3b;
+  --input-surface: #f7f3ed;
+  --overlay: rgba(36, 27, 20, 0.5);
+  --keyboard-surface: rgba(246, 243, 238, 0.96);
+  --shadow: 0 10px 30px rgba(70, 49, 28, 0.15);
 }
 
 *,
@@ -74,6 +100,12 @@ button {
   outline-offset: 2px;
 }
 
+/* Modal headings take programmatic focus for screen readers; they aren't interactive */
+.modal h2[tabindex="-1"]:focus,
+.modal h2[tabindex="-1"]:focus-visible {
+  outline: none;
+}
+
 [data-lucide],
 svg.lucide {
   width: 1.1em;
@@ -84,6 +116,46 @@ svg.lucide {
 .app {
   width: 100%;
   max-width: 1040px;
+}
+
+/* ============================================================
+   AD RAILS (desktop only; fixed beside the centered 1040px app)
+   ============================================================ */
+.ad-rail {
+  display: none;
+}
+
+@media (min-width: 1400px) {
+  .ad-rail {
+    display: block;
+    position: fixed;
+    top: 24px;
+    width: 160px;
+  }
+
+  .ad-rail--left {
+    right: calc(50% + 520px + 20px);
+  }
+
+  .ad-rail--right {
+    left: calc(50% + 520px + 20px);
+  }
+}
+
+.ad-slot {
+  width: 160px;
+  height: 600px;
+  max-height: calc(100dvh - 48px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 /* ============================================================
@@ -100,12 +172,6 @@ svg.lucide {
   letter-spacing: 0.02em;
   color: var(--accent);
   line-height: 1;
-/* Modal headings take programmatic focus for screen readers; they aren't interactive */
-.modal h2[tabindex="-1"]:focus,
-.modal h2[tabindex="-1"]:focus-visible {
-  outline: none;
-}
-
 }
 
 .brand-ball {
@@ -203,6 +269,11 @@ svg.lucide {
 .icon-btn:hover {
   background: var(--surface-2);
   border-color: var(--line-strong);
+}
+
+#theme-toggle[aria-pressed="true"] {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line-strong));
 }
 
 .btn {
@@ -467,7 +538,7 @@ svg.lucide {
   letter-spacing: 0.14em;
   padding: 8px 18px 8px 26px;
   border-radius: var(--radius);
-  background: #0e0e0e;
+  background: var(--input-surface);
   border: 1px solid var(--line-strong);
   color: var(--accent);
   font-variant-numeric: tabular-nums;
@@ -513,7 +584,7 @@ svg.lucide {
   padding: 10px 12px 10px 20px;
   border-radius: var(--radius);
   border: 1px solid var(--line-strong);
-  background: #0e0e0e;
+  background: var(--input-surface);
   color: var(--accent);
 }
 .pin-input::placeholder {
@@ -586,7 +657,7 @@ svg.lucide {
   margin-bottom: 14px;
   padding: 10px 16px;
   border-radius: var(--radius);
-  background: #0e0e0e;
+  background: var(--input-surface);
   border: 1px solid var(--line-strong);
 }
 
@@ -1108,7 +1179,7 @@ svg.lucide {
   align-items: center;
   justify-content: center;
   padding: 16px;
-  background: rgba(7, 7, 7, 0.72);
+  background: var(--overlay);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
 }
@@ -1505,7 +1576,7 @@ svg.lucide {
   flex-direction: column;
   gap: 6px;
   padding: 8px 4px max(10px, env(safe-area-inset-bottom));
-  background: rgba(14, 14, 14, 0.96);
+  background: var(--keyboard-surface);
   border-top: 1px solid var(--line-strong);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);

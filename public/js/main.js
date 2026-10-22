@@ -835,13 +835,16 @@ function setupHintButton() {
 
   btn.addEventListener("click", async () => {
     if (!targetPlayer && !vsMode) return;
+    const round = vsRound;
     if (!targetImages) await loadTargetImages();
+    if (vsMode && round !== vsRound) return; // a rematch started while loading
     if (currentMode === "stats") {
       if (!targetImages?.logo) return;
       teamLogoImg.src = targetImages.logo;
       teamLogoImg.style.display = "block";
       silhouetteImg.style.display = "none";
     } else if (targetImages?.headshot && (await generateSilhouette(targetImages.headshot))) {
+      if (vsMode && round !== vsRound) return;
       silhouetteImg.style.display = "block";
       teamLogoImg.style.display = "none";
     } else {

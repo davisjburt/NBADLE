@@ -45,7 +45,7 @@ async function pickTarget(env, url, startersOnly, mode) {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-async function proxyHeadshot(playerId) {
+async function proxyHeadshot(playerId, cacheControl = "public, max-age=86400") {
   const upstream = await fetch(
     `https://cdn.nba.com/headshots/nba/latest/260x190/${playerId}.png`,
     { cf: { cacheTtl: 86400, cacheEverything: true } },
@@ -54,7 +54,7 @@ async function proxyHeadshot(playerId) {
   return new Response(upstream.body, {
     headers: {
       "Content-Type": "image/png",
-      "Cache-Control": "public, max-age=86400",
+      "Cache-Control": cacheControl,
     },
   });
 }
@@ -131,7 +131,8 @@ async function handleVs(request, env, url, parts) {
   if (isGet && action === "headshot") {
     const res = await room.hintTarget(playerId);
     if (res.status !== 200) return fromRoom(res);
-    return proxyHeadshot(res.body.id);
+    // The target changes every round at this same URL, so it must never be cached.
+    return proxyHeadshot(res.body.id, "private, no-store");
   }
 
   if (request.method !== "POST") return json({ error: "Not found" }, 404);
@@ -153,7 +154,7 @@ async function handleVs(request, env, url, parts) {
       return res.body.mode === "stats"
         ? json({ logo: teamLogoUrl(res.body.team) })
         : json({
-            headshot: `/api/vs/headshot/${pin}?player_id=${encodeURIComponent(playerId)}`,
+            headshot: `/api/vs/headshot/${pin}?player_id=${encodeURIComponent(playerId)}&round=${res.body.round}`,
           });
     }
 

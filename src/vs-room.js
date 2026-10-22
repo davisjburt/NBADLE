@@ -159,7 +159,7 @@ export class VsRoom extends DurableObject {
     const room = await this.#load();
     if (!room) return err(404, "Room not found");
     if (!this.#roleOf(room, playerId)) return err(403, "Not in this room");
-    return ok({ id: room.target.id, team: room.target.team, mode: room.mode });
+    return ok({ id: room.target.id, team: room.target.team, mode: room.mode, round: room.round });
   }
 
   async rematch(playerId, target) {
